@@ -11,6 +11,7 @@ import type { ColumnDefs } from "../types"
 import { unionAll, type CHUnionQuery } from "../union"
 import { compileCH } from "../compile"
 import { ErrorEvents, ErrorSpans, ServiceUsage, TraceDetailSpans, TraceListMv, Traces } from "../tables"
+import { buildProjectedMapExpr } from "./query-helpers"
 
 // ---------------------------------------------------------------------------
 // Shared: Error fingerprint expression (typed DSL)
@@ -132,6 +133,38 @@ export function errorsTimeseriesQuery(opts: ErrorsTimeseriesOpts) {
 // Span hierarchy
 // ---------------------------------------------------------------------------
 
+/**
+ * Span attribute keys the waterfall / timeline / flow views actually read
+ * (via `getHttpInfo` + `getCacheInfo`). The hierarchy query projects only
+ * these instead of the full `SpanAttributes` map — selecting the full map for
+ * every span in a wide trace materializes hundreds of MB of JSON and blows the
+ * query memory limit. The full map is loaded lazily per-span by `spanDetailQuery`.
+ */
+const TREE_SPAN_ATTR_KEYS = [
+	"http.method",
+	"http.request.method",
+	"http.route",
+	"url.full",
+	"http.url",
+	"server.address",
+	"net.peer.name",
+	"url.path",
+	"http.target",
+	"http.status_code",
+	"http.response.status_code",
+	"cache.system",
+	"cache.result",
+	"cache.name",
+	"cache.operation",
+	"cache.lookup_performed",
+] as const
+
+/**
+ * Resource attribute keys the trace-detail header reads (deployment env + commit).
+ * Everything else in `ResourceAttributes` is loaded lazily by `spanDetailQuery`.
+ */
+const TREE_RESOURCE_ATTR_KEYS = ["deployment.environment", "deployment.commit_sha"] as const
+
 export interface SpanHierarchyOpts {
 	traceId: string
 	spanId?: string
@@ -197,8 +230,14 @@ export function spanHierarchyQuery(opts: SpanHierarchyOpts) {
 				startTime: $.Timestamp,
 				statusCode: $.StatusCode,
 				statusMessage: $.StatusMessage,
-				spanAttributes: CH.toJSONString($.SpanAttributes),
-				resourceAttributes: CH.toJSONString($.ResourceAttributes),
+				// Trimmed maps — only the keys the tree views render. Full maps are
+				// fetched per-span on demand via spanDetailQuery.
+				spanAttributes: CH.toJSONString(
+					buildProjectedMapExpr(TREE_SPAN_ATTR_KEYS, "SpanAttributes"),
+				),
+				resourceAttributes: CH.toJSONString(
+					buildProjectedMapExpr(TREE_RESOURCE_ATTR_KEYS, "ResourceAttributes"),
+				),
 				relationship: relationshipExpr,
 			}
 		})
@@ -208,7 +247,55 @@ export function spanHierarchyQuery(opts: SpanHierarchyOpts) {
 			CH.whenTrue(!!opts.narrowByTime, () => $.Timestamp.gte(param.dateTime("startTime"))),
 			CH.whenTrue(!!opts.narrowByTime, () => $.Timestamp.lte(param.dateTime("endTime"))),
 		])
-		.orderBy(["startTime", "asc"])
+		// No ORDER BY — buildSpanTree (web) rebuilds the tree and sorts children
+		// client-side, so a server-side sort over wide rows is pure overhead.
+		.format("JSON")
+}
+
+// ---------------------------------------------------------------------------
+// Span detail — full attributes for a single span
+// ---------------------------------------------------------------------------
+
+export interface SpanDetailOpts {
+	traceId: string
+	spanId: string
+	/**
+	 * When true, adds `Timestamp BETWEEN startTime AND endTime` filters so
+	 * ClickHouse can prune partitions. Callers must then pass `startTime` /
+	 * `endTime` to `compile()`.
+	 */
+	narrowByTime?: boolean
+}
+
+export interface SpanDetailOutput {
+	readonly traceId: string
+	readonly spanId: string
+	readonly spanAttributes: string
+	readonly resourceAttributes: string
+}
+
+/**
+ * Point lookup for one span's full attribute maps. The sorting key
+ * `(OrgId, TraceId, SpanId)` makes this an O(log N) lookup. Used by the trace
+ * detail panel to lazily load the attributes the trimmed `spanHierarchyQuery`
+ * intentionally omits.
+ */
+export function spanDetailQuery(opts: SpanDetailOpts) {
+	return from(TraceDetailSpans)
+		.select(($) => ({
+			traceId: $.TraceId,
+			spanId: $.SpanId,
+			spanAttributes: CH.toJSONString($.SpanAttributes),
+			resourceAttributes: CH.toJSONString($.ResourceAttributes),
+		}))
+		.where(($) => [
+			$.TraceId.eq(opts.traceId),
+			$.SpanId.eq(opts.spanId),
+			$.OrgId.eq(param.string("orgId")),
+			CH.whenTrue(!!opts.narrowByTime, () => $.Timestamp.gte(param.dateTime("startTime"))),
+			CH.whenTrue(!!opts.narrowByTime, () => $.Timestamp.lte(param.dateTime("endTime"))),
+		])
+		.limit(1)
 		.format("JSON")
 }
 

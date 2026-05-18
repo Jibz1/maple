@@ -5,7 +5,7 @@ import { tracesTimeseriesQuery, tracesBreakdownQuery, tracesListQuery } from "./
 import { logsFacetsQuery } from "./queries/logs"
 import { servicesFacetsQuery } from "./queries/services"
 import { metricsSummaryQuery } from "./queries/metrics"
-import { tracesDurationStatsQuery, spanHierarchyQuery } from "./queries/errors"
+import { tracesDurationStatsQuery, spanHierarchyQuery, spanDetailQuery } from "./queries/errors"
 import { unionAll } from "./union"
 
 // ---------------------------------------------------------------------------
@@ -1017,13 +1017,21 @@ describe("converted queries", () => {
 		expect(sql).toContain("FROM trace_list_mv") // tracesDurationStats always uses MV directly
 	})
 
-	it("spanHierarchyQuery compiles with toJSONString", () => {
+	it("spanHierarchyQuery projects only the trimmed tree attribute keys", () => {
 		const q = spanHierarchyQuery({ traceId: "abc123" })
 		const { sql } = compileCH(q, { orgId: "org_1" })
-		expect(sql).toContain("toJSONString(SpanAttributes) AS spanAttributes")
-		expect(sql).toContain("toJSONString(ResourceAttributes) AS resourceAttributes")
+		// Maps are trimmed to the keys the tree views render — never the full map.
+		expect(sql).not.toContain("toJSONString(SpanAttributes)")
+		expect(sql).not.toContain("toJSONString(ResourceAttributes)")
+		expect(sql).toContain("'http.route', SpanAttributes['http.route']")
+		expect(sql).toContain("'cache.result', SpanAttributes['cache.result']")
+		expect(sql).toContain("'deployment.environment', ResourceAttributes['deployment.environment']")
+		expect(sql).toContain("AS spanAttributes")
+		expect(sql).toContain("AS resourceAttributes")
 		expect(sql).toContain("TraceId = 'abc123'")
 		expect(sql).toContain("'related' AS relationship")
+		// No server-side sort — buildSpanTree re-sorts client-side.
+		expect(sql).not.toContain("ORDER BY")
 	})
 
 	it("spanHierarchyQuery with spanId marks target", () => {
@@ -1042,6 +1050,29 @@ describe("converted queries", () => {
 
 	it("spanHierarchyQuery with narrowByTime adds Timestamp BETWEEN filter", () => {
 		const q = spanHierarchyQuery({ traceId: "abc", narrowByTime: true })
+		const { sql } = compileCH(q, {
+			orgId: "org_1",
+			startTime: "2026-04-15 13:00:00",
+			endTime: "2026-04-15 15:00:00",
+		})
+		expect(sql).toContain("Timestamp >= '2026-04-15 13:00:00'")
+		expect(sql).toContain("Timestamp <= '2026-04-15 15:00:00'")
+	})
+
+	it("spanDetailQuery is a point lookup returning the full attribute maps", () => {
+		const q = spanDetailQuery({ traceId: "abc123", spanId: "span1" })
+		const { sql } = compileCH(q, { orgId: "org_1" })
+		expect(sql).toContain("toJSONString(SpanAttributes) AS spanAttributes")
+		expect(sql).toContain("toJSONString(ResourceAttributes) AS resourceAttributes")
+		expect(sql).toContain("FROM trace_detail_spans")
+		expect(sql).toContain("TraceId = 'abc123'")
+		expect(sql).toContain("SpanId = 'span1'")
+		expect(sql).toContain("OrgId = 'org_1'")
+		expect(sql).toContain("LIMIT 1")
+	})
+
+	it("spanDetailQuery with narrowByTime adds Timestamp filters", () => {
+		const q = spanDetailQuery({ traceId: "abc", spanId: "s1", narrowByTime: true })
 		const { sql } = compileCH(q, {
 			orgId: "org_1",
 			startTime: "2026-04-15 13:00:00",
