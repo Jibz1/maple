@@ -16,8 +16,8 @@ import {
 } from "@maple/domain/http"
 import { orgIngestAttributeMappings } from "@maple/db"
 import { and, eq } from "drizzle-orm"
-import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
-import { Database } from "./DatabaseLive"
+import { Array, Clock, Context, Effect, Layer, Option, Schema } from "effect"
+import { Database, DatabaseError } from "./DatabaseLive"
 
 type MappingRow = typeof orgIngestAttributeMappings.$inferSelect
 
@@ -51,20 +51,18 @@ export interface IngestAttributeMappingServiceShape {
 	>
 }
 
-const toPersistenceError = (error: unknown) =>
-	new IngestAttributeMappingPersistenceError({
-		message: error instanceof Error ? error.message : "Attribute mapping persistence failed",
-	})
+const toPersistenceError = (error: DatabaseError) =>
+	new IngestAttributeMappingPersistenceError({ message: error.message })
 
-// Logs the underlying Cause before collapsing any database failure into a
+// Logs the underlying Cause before collapsing the database failure into a
 // persistence error, so a failed query stays visible in traces and logs.
-const runDb = <A, E>(
+const runDb = <A>(
 	operation: string,
-	effect: Effect.Effect<A, E>,
+	effect: Effect.Effect<A, DatabaseError>,
 ): Effect.Effect<A, IngestAttributeMappingPersistenceError> =>
 	effect.pipe(
 		Effect.tapCause((cause) =>
-			Effect.logError(`IngestAttributeMappingService.${operation}: database operation failed`, cause),
+			Effect.logError("Attribute mapping database operation failed", { operation, cause }),
 		),
 		Effect.mapError(toPersistenceError),
 	)
@@ -87,32 +85,25 @@ const rowToResponse = (row: MappingRow): IngestAttributeMapping =>
 		updatedAt: decodeIsoDateTimeStringSync(new Date(row.updatedAt).toISOString()),
 	})
 
-const validateRule = (rule: {
+const validateRule = Effect.fnUntraced(function* (rule: {
 	sourceContext: IngestMappingSourceContext
 	sourceKey: string
 	targetKey: string
-}): Effect.Effect<void, IngestAttributeMappingValidationError> => {
+}) {
 	const sourceKey = rule.sourceKey.trim()
 	const targetKey = rule.targetKey.trim()
 	if (sourceKey.length === 0) {
-		return Effect.fail(
-			new IngestAttributeMappingValidationError({ message: "Source key must not be empty" }),
-		)
+		return yield* new IngestAttributeMappingValidationError({ message: "Source key must not be empty" })
 	}
 	if (targetKey.length === 0) {
-		return Effect.fail(
-			new IngestAttributeMappingValidationError({ message: "Target key must not be empty" }),
-		)
+		return yield* new IngestAttributeMappingValidationError({ message: "Target key must not be empty" })
 	}
 	if (rule.sourceContext === "span" && sourceKey === targetKey) {
-		return Effect.fail(
-			new IngestAttributeMappingValidationError({
-				message: "Source key and target key must differ when the source is a span attribute",
-			}),
-		)
+		return yield* new IngestAttributeMappingValidationError({
+			message: "Source key and target key must differ when the source is a span attribute",
+		})
 	}
-	return Effect.void
-}
+})
 
 export class IngestAttributeMappingService extends Context.Service<
 	IngestAttributeMappingService,
@@ -151,15 +142,11 @@ export class IngestAttributeMappingService extends Context.Service<
 			const row = yield* selectById(orgId, mappingId)
 			if (Option.isSome(row)) return row.value
 
-			yield* Effect.logWarning(
-				`IngestAttributeMappingService: mapping ${mappingId} not found for org ${orgId}`,
-			)
-			return yield* Effect.fail(
-				new IngestAttributeMappingNotFoundError({
-					mappingId,
-					message: "Attribute mapping not found",
-				}),
-			)
+			yield* Effect.logWarning("Attribute mapping not found", { mappingId, orgId })
+			return yield* new IngestAttributeMappingNotFoundError({
+				mappingId,
+				message: "Attribute mapping not found",
+			})
 		})
 
 		const list = Effect.fn("IngestAttributeMappingService.list")(function* (orgId: OrgId) {
@@ -174,7 +161,7 @@ export class IngestAttributeMappingService extends Context.Service<
 			)
 
 			return new IngestAttributeMappingsListResponse({
-				mappings: rows.map(rowToResponse),
+				mappings: Array.map(rows, rowToResponse),
 			})
 		})
 
@@ -207,14 +194,13 @@ export class IngestAttributeMappingService extends Context.Service<
 
 			const row = yield* selectById(orgId, id)
 			if (Option.isNone(row)) {
-				yield* Effect.logError(
-					`IngestAttributeMappingService.create: mapping ${id} missing after insert for org ${orgId}`,
-				)
-				return yield* Effect.fail(
-					new IngestAttributeMappingPersistenceError({
-						message: "Failed to create attribute mapping",
-					}),
-				)
+				yield* Effect.logError("Attribute mapping missing after insert", {
+					mappingId: id,
+					orgId,
+				})
+				return yield* new IngestAttributeMappingPersistenceError({
+					message: "Failed to create attribute mapping",
+				})
 			}
 
 			return rowToResponse(row.value)
@@ -260,14 +246,10 @@ export class IngestAttributeMappingService extends Context.Service<
 
 			const row = yield* selectById(orgId, mappingId)
 			if (Option.isNone(row)) {
-				yield* Effect.logError(
-					`IngestAttributeMappingService.update: mapping ${mappingId} missing after update for org ${orgId}`,
-				)
-				return yield* Effect.fail(
-					new IngestAttributeMappingPersistenceError({
-						message: "Failed to load updated attribute mapping",
-					}),
-				)
+				yield* Effect.logError("Attribute mapping missing after update", { mappingId, orgId })
+				return yield* new IngestAttributeMappingPersistenceError({
+					message: "Failed to load updated attribute mapping",
+				})
 			}
 
 			return rowToResponse(row.value)
@@ -294,15 +276,11 @@ export class IngestAttributeMappingService extends Context.Service<
 
 			const deleted = Option.fromNullishOr(rows[0])
 			if (Option.isNone(deleted)) {
-				yield* Effect.logWarning(
-					`IngestAttributeMappingService: mapping ${mappingId} not found for org ${orgId}`,
-				)
-				return yield* Effect.fail(
-					new IngestAttributeMappingNotFoundError({
-						mappingId,
-						message: "Attribute mapping not found",
-					}),
-				)
+				yield* Effect.logWarning("Attribute mapping not found", { mappingId, orgId })
+				return yield* new IngestAttributeMappingNotFoundError({
+					mappingId,
+					message: "Attribute mapping not found",
+				})
 			}
 
 			return new IngestAttributeMappingDeleteResponse({

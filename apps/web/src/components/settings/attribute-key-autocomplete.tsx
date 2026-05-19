@@ -47,6 +47,11 @@ export function AttributeKeyAutocomplete({
 			<AutocompleteInput id={id} placeholder={placeholder} showClear />
 			<AutocompletePopup>
 				{Result.isInitial(result) && <AutocompleteStatus>Loading attributes…</AutocompleteStatus>}
+				{Result.isFailure(result) && (
+					<AutocompleteStatus>
+						Couldn't load attribute suggestions — you can still type a key
+					</AutocompleteStatus>
+				)}
 				<AutocompleteEmpty>No matching attributes — press Enter to use as typed</AutocompleteEmpty>
 				<AutocompleteList>
 					<AutocompleteCollection>
