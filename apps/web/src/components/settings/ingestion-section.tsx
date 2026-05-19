@@ -26,6 +26,7 @@ import { Separator } from "@maple/ui/components/ui/separator"
 import { AlertWarningIcon, ArrowPathIcon, CheckIcon, CopyIcon, EyeIcon, ShieldIcon } from "@/components/icons"
 import { ingestUrl } from "@/lib/services/common/ingest-url"
 import { MapleApiAtomClient } from "@/lib/services/common/atom-client"
+import { AttributeMappingsSection } from "./attribute-mappings-section"
 
 function maskKey(key: string): string {
 	if (key.length <= 18) return key
@@ -204,6 +205,7 @@ export function IngestionSection() {
 
 	return (
 		<>
+			<div className="space-y-4">
 			<div className="grid grid-cols-2 gap-4">
 				<Card>
 					<CardHeader>
@@ -279,6 +281,9 @@ export function IngestionSection() {
 						/>
 					</CardContent>
 				</Card>
+			</div>
+
+			<AttributeMappingsSection />
 			</div>
 
 			<AlertDialog open={regenerateDialogOpen} onOpenChange={setRegenerateDialogOpen}>
