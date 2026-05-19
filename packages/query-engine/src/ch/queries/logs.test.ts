@@ -5,6 +5,7 @@ import {
 	logsBreakdownQuery,
 	logsCountQuery,
 	logsListQuery,
+	getLogByKeyQuery,
 	errorRateByServiceQuery,
 	logsFacetsQuery,
 } from "./logs"
@@ -195,6 +196,47 @@ describe("logsListQuery", () => {
 		const q = logsListQuery({ minSeverity: 9 })
 		const { sql } = compileCH(q, baseParams)
 		expect(sql).toContain("SeverityNumber >= 9")
+	})
+})
+
+// ---------------------------------------------------------------------------
+// getLogByKeyQuery
+// ---------------------------------------------------------------------------
+
+describe("getLogByKeyQuery", () => {
+	const keyParams = { ...baseParams, timestamp: "2024-01-01 12:00:00.123456" }
+
+	it("compiles an exact-match single-log lookup", () => {
+		const q = getLogByKeyQuery({ serviceName: "api" })
+		const { sql } = compileCH(q, keyParams)
+		expect(sql).toContain("FROM logs")
+		expect(sql).toContain("Timestamp AS timestamp")
+		expect(sql).toContain("toJSONString(LogAttributes) AS logAttributes")
+		expect(sql).toContain("Timestamp = '2024-01-01 12:00:00.123456'")
+		expect(sql).toContain("ServiceName = 'api'")
+		expect(sql).toContain("LIMIT 1")
+		expect(sql).toContain("FORMAT JSON")
+	})
+
+	it("bounds TimestampTime for partition pruning", () => {
+		const q = getLogByKeyQuery({ serviceName: "api" })
+		const { sql } = compileCH(q, keyParams)
+		expect(sql).toContain("TimestampTime >= '2024-01-01 00:00:00'")
+		expect(sql).toContain("TimestampTime <= '2024-01-02 00:00:00'")
+	})
+
+	it("applies optional traceId and spanId filters", () => {
+		const q = getLogByKeyQuery({ serviceName: "api", traceId: "trace123", spanId: "span456" })
+		const { sql } = compileCH(q, keyParams)
+		expect(sql).toContain("TraceId = 'trace123'")
+		expect(sql).toContain("SpanId = 'span456'")
+	})
+
+	it("omits traceId and spanId filters when not provided", () => {
+		const q = getLogByKeyQuery({ serviceName: "api" })
+		const { sql } = compileCH(q, keyParams)
+		expect(sql).not.toContain("TraceId =")
+		expect(sql).not.toContain("SpanId =")
 	})
 })
 

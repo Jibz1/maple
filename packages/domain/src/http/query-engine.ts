@@ -323,6 +323,22 @@ export class ListLogsResponse extends Schema.Class<ListLogsResponse>("ListLogsRe
 	data: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
 }) {}
 
+// Exact-match lookup of one log by its composite key (logs have no primary id).
+// `timestamp` is the raw ClickHouse DateTime64 string and carries sub-second
+// precision (`YYYY-MM-DD HH:mm:ss.fffffffff`), so it is a plain string rather
+// than `TinybirdDateTime` (which only matches second-level precision).
+export class GetLogRequest extends Schema.Class<GetLogRequest>("GetLogRequest")({
+	timestamp: Schema.String,
+	serviceName: Schema.String,
+	traceId: Schema.optional(Schema.String),
+	spanId: Schema.optional(Schema.String),
+}) {}
+
+// `data` holds 0 or 1 rows — the requested log, or nothing if it aged out.
+export class GetLogResponse extends Schema.Class<GetLogResponse>("GetLogResponse")({
+	data: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
+}) {}
+
 export class ListMetricsRequest extends Schema.Class<ListMetricsRequest>("ListMetricsRequest")({
 	startTime: TinybirdDateTime,
 	endTime: TinybirdDateTime,
@@ -1102,6 +1118,13 @@ export class QueryEngineApiGroup extends HttpApiGroup.make("queryEngine")
 		HttpApiEndpoint.post("listLogs", "/list-logs", {
 			payload: ListLogsRequest,
 			success: ListLogsResponse,
+			error: queryEngineEndpointErrors,
+		}),
+	)
+	.add(
+		HttpApiEndpoint.post("getLog", "/get-log", {
+			payload: GetLogRequest,
+			success: GetLogResponse,
 			error: queryEngineEndpointErrors,
 		}),
 	)

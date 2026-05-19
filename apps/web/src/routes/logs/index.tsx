@@ -24,7 +24,7 @@ const logsSearchSchema = Schema.Struct({
 
 export type LogsSearchParams = Schema.Schema.Type<typeof logsSearchSchema>
 
-export const Route = effectRoute(createFileRoute("/logs"))({
+export const Route = effectRoute(createFileRoute("/logs/"))({
 	component: LogsPage,
 	validateSearch: Schema.toStandardSchemaV1(logsSearchSchema),
 })

@@ -25,9 +25,15 @@ const BODY_LINE_THRESHOLD = 280
 
 interface LogHeroHeaderProps {
 	log: Log
+	/**
+	 * Render the drawer close button. Must be `false` outside a `Sheet`
+	 * (e.g. the standalone `/logs/$logId` page) — `SheetClose` throws when
+	 * rendered without a `Sheet` ancestor.
+	 */
+	showClose?: boolean
 }
 
-export function LogHeroHeader({ log }: LogHeroHeaderProps) {
+export function LogHeroHeader({ log, showClose = true }: LogHeroHeaderProps) {
 	const [expanded, setExpanded] = useState(false)
 	const tone = HERO_TONE[log.severityText.toUpperCase()] ?? "border-border"
 	const body = log.body ?? ""
@@ -45,9 +51,13 @@ export function LogHeroHeader({ log }: LogHeroHeaderProps) {
 				<Badge variant="outline" className="font-mono text-[10px]">
 					<CopyableValue value={log.serviceName}>{log.serviceName}</CopyableValue>
 				</Badge>
-				<SheetClose render={<Button variant="ghost" size="icon" className="ml-auto shrink-0" />}>
-					<XmarkIcon size={16} />
-				</SheetClose>
+				{showClose && (
+					<SheetClose
+						render={<Button variant="ghost" size="icon" className="ml-auto shrink-0" />}
+					>
+						<XmarkIcon size={16} />
+					</SheetClose>
+				)}
 			</div>
 
 			<div className="mt-2.5">

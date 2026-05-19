@@ -221,6 +221,49 @@ export function logsListQuery(opts: LogsListOpts) {
 }
 
 // ---------------------------------------------------------------------------
+// Single log lookup (exact-match by composite key)
+//
+// Logs have no primary id; a row is identified by Timestamp + ServiceName
+// (+ TraceId / SpanId when present). `Timestamp` is DateTime64 (sub-second),
+// so the pair is effectively unique per service. Used by the shareable
+// `/logs/$logId` detail page.
+// ---------------------------------------------------------------------------
+
+export interface LogByKeyOpts {
+	serviceName: string
+	traceId?: string
+	spanId?: string
+}
+
+export function getLogByKeyQuery(opts: LogByKeyOpts) {
+	return from(Logs)
+		.select(($) => ({
+			timestamp: $.Timestamp,
+			severityText: $.SeverityText,
+			severityNumber: $.SeverityNumber,
+			serviceName: $.ServiceName,
+			body: $.Body,
+			traceId: $.TraceId,
+			spanId: $.SpanId,
+			logAttributes: CH.toJSONString($.LogAttributes),
+			resourceAttributes: CH.toJSONString($.ResourceAttributes),
+		}))
+		.where(($) => [
+			$.OrgId.eq(param.string("orgId")),
+			// TimestampTime is the partition/index key; bounding it unlocks
+			// partition pruning. Timestamp.eq pins the exact sub-second row.
+			$.TimestampTime.gte(param.dateTime("startTime")),
+			$.TimestampTime.lte(param.dateTime("endTime")),
+			$.Timestamp.eq(param.dateTime("timestamp")),
+			$.ServiceName.eq(opts.serviceName),
+			CH.when(opts.traceId, (v: string) => $.TraceId.eq(v)),
+			CH.when(opts.spanId, (v: string) => $.SpanId.eq(v)),
+		])
+		.limit(1)
+		.format("JSON")
+}
+
+// ---------------------------------------------------------------------------
 // Error rate by service
 // ---------------------------------------------------------------------------
 

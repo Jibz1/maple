@@ -185,6 +185,7 @@ export {
 	logsBreakdownQuery,
 	logsCountQuery,
 	logsListQuery,
+	getLogByKeyQuery,
 	logsFacetsQuery,
 	errorRateByServiceQuery,
 	type LogsTimeseriesOpts,
@@ -194,6 +195,7 @@ export {
 	type LogsCountOutput,
 	type LogsListOpts,
 	type LogsListOutput,
+	type LogByKeyOpts,
 	type LogsFacetsOutput,
 	type ErrorRateByServiceOutput,
 } from "./queries/logs"

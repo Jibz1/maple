@@ -3,7 +3,7 @@
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
-import { SidebarLeftIcon } from "../icons"
+import { LayoutMoveToLeftIcon, LayoutMoveToRightIcon } from "../icons"
 import * as React from "react"
 import { useMediaQuery } from "../../hooks/use-media-query"
 import { cn } from "../../lib/utils"
@@ -271,7 +271,7 @@ export function SidebarTrigger({
 	onClick,
 	...props
 }: React.ComponentProps<typeof Button>): React.ReactElement {
-	const { toggleSidebar } = useSidebar()
+	const { toggleSidebar, state } = useSidebar()
 
 	return (
 		<Button
@@ -286,7 +286,7 @@ export function SidebarTrigger({
 			variant="ghost"
 			{...props}
 		>
-			<SidebarLeftIcon />
+			{state === "expanded" ? <LayoutMoveToLeftIcon /> : <LayoutMoveToRightIcon />}
 			<span className="sr-only">Toggle Sidebar</span>
 		</Button>
 	)

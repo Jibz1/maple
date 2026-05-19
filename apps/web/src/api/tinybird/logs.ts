@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect"
 import { QueryEngineExecuteRequest } from "@maple/query-engine"
 import { TraceId, SpanId } from "@maple/domain"
-import { ListLogsRequest } from "@maple/domain/http"
+import { GetLogRequest, ListLogsRequest } from "@maple/domain/http"
 import { MapleApiAtomClient } from "@/lib/services/common/atom-client"
 import {
 	TinybirdDateTimeString,
@@ -124,6 +124,51 @@ const listLogsEffect = Effect.fn("QueryEngine.listLogs")(function* ({ data }: { 
 			cursor,
 		},
 	}
+})
+
+// ---------------------------------------------------------------------------
+// Single log lookup — exact-match by composite key, backs the `/logs/$logId`
+// shareable detail page. `timestamp` is the raw ClickHouse DateTime64 string
+// (sub-second precision), so it is not constrained to TinybirdDateTimeString.
+// ---------------------------------------------------------------------------
+
+const GetLogInputSchema = Schema.Struct({
+	timestamp: Schema.String,
+	serviceName: Schema.String,
+	traceId: Schema.optional(Schema.String),
+	spanId: Schema.optional(Schema.String),
+})
+
+export type GetLogInput = Schema.Schema.Type<typeof GetLogInputSchema>
+
+export interface GetLogResult {
+	data: Log | null
+}
+
+export function getLog({ data }: { data: GetLogInput }) {
+	return getLogEffect({ data })
+}
+
+const getLogEffect = Effect.fn("QueryEngine.getLog")(function* ({ data }: { data: GetLogInput }) {
+	const input = yield* decodeInput(GetLogInputSchema, data ?? {}, "getLog")
+
+	const response = yield* runTinybirdQuery("getLog", () =>
+		Effect.gen(function* () {
+			const client = yield* MapleApiAtomClient
+			return yield* client.queryEngine.getLog({
+				payload: new GetLogRequest({
+					timestamp: input.timestamp,
+					serviceName: input.serviceName,
+					traceId: input.traceId,
+					spanId: input.spanId,
+				}),
+			})
+		}),
+	)
+
+	return {
+		data: response.data.length > 0 ? transformLog(response.data[0]) : null,
+	} satisfies GetLogResult
 })
 
 export function getLogsCount({ data }: { data: ListLogsInput }) {

@@ -15,6 +15,7 @@ import {
 	getErrorsTimeseries,
 } from "@/api/tinybird/errors"
 import {
+	getLog,
 	getLogAttributeKeys,
 	getLogAttributeValues,
 	getLogsFacets,
@@ -155,6 +156,10 @@ export const getSpanDetailResultAtom = makeQueryAtomFamily(getSpanDetail, {
 
 export const listLogsResultAtom = makeQueryAtomFamily(listLogs, {
 	staleTime: 30_000,
+})
+
+export const getLogResultAtom = makeQueryAtomFamily(getLog, {
+	staleTime: 60_000,
 })
 
 export const getLogsFacetsResultAtom = makeQueryAtomFamily(getLogsFacets, {

@@ -20,19 +20,20 @@ import { Route as QueryBuilderLabRouteImport } from './routes/query-builder-lab'
 import { Route as OrgRequiredRouteImport } from './routes/org-required'
 import { Route as MetricsRouteImport } from './routes/metrics'
 import { Route as McpRouteImport } from './routes/mcp'
-import { Route as LogsRouteImport } from './routes/logs'
 import { Route as DeveloperRouteImport } from './routes/developer'
 import { Route as ConnectorsRouteImport } from './routes/connectors'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TracesIndexRouteImport } from './routes/traces/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
+import { Route as LogsIndexRouteImport } from './routes/logs/index'
 import { Route as InfraIndexRouteImport } from './routes/infra/index'
 import { Route as ErrorsIndexRouteImport } from './routes/errors/index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards/index'
 import { Route as AlertsIndexRouteImport } from './routes/alerts/index'
 import { Route as TracesTraceIdRouteImport } from './routes/traces/$traceId'
 import { Route as ServicesServiceNameRouteImport } from './routes/services/$serviceName'
+import { Route as LogsLogIdRouteImport } from './routes/logs/$logId'
 import { Route as InfraHostNameRouteImport } from './routes/infra/$hostName'
 import { Route as ErrorsErrorTypeRouteImport } from './routes/errors/$errorType'
 import { Route as DashboardsTemplatesRouteImport } from './routes/dashboards/templates'
@@ -104,11 +105,6 @@ const McpRoute = McpRouteImport.update({
   path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LogsRoute = LogsRouteImport.update({
-  id: '/logs',
-  path: '/logs',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DeveloperRoute = DeveloperRouteImport.update({
   id: '/developer',
   path: '/developer',
@@ -139,6 +135,11 @@ const ServicesIndexRoute = ServicesIndexRouteImport.update({
   path: '/services/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LogsIndexRoute = LogsIndexRouteImport.update({
+  id: '/logs/',
+  path: '/logs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InfraIndexRoute = InfraIndexRouteImport.update({
   id: '/infra/',
   path: '/infra/',
@@ -167,6 +168,11 @@ const TracesTraceIdRoute = TracesTraceIdRouteImport.update({
 const ServicesServiceNameRoute = ServicesServiceNameRouteImport.update({
   id: '/services/$serviceName',
   path: '/services/$serviceName',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsLogIdRoute = LogsLogIdRouteImport.update({
+  id: '/logs/$logId',
+  path: '/logs/$logId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InfraHostNameRoute = InfraHostNameRouteImport.update({
@@ -257,7 +263,6 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/connectors': typeof ConnectorsRoute
   '/developer': typeof DeveloperRoute
-  '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
   '/metrics': typeof MetricsRoute
   '/org-required': typeof OrgRequiredRoute
@@ -275,12 +280,14 @@ export interface FileRoutesByFullPath {
   '/dashboards/templates': typeof DashboardsTemplatesRoute
   '/errors/$errorType': typeof ErrorsErrorTypeRoute
   '/infra/$hostName': typeof InfraHostNameRoute
+  '/logs/$logId': typeof LogsLogIdRoute
   '/services/$serviceName': typeof ServicesServiceNameRoute
   '/traces/$traceId': typeof TracesTraceIdRoute
   '/alerts/': typeof AlertsIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
   '/errors/': typeof ErrorsIndexRoute
   '/infra/': typeof InfraIndexRoute
+  '/logs/': typeof LogsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/traces/': typeof TracesIndexRoute
   '/errors/issues/$issueId': typeof ErrorsIssuesIssueIdRoute
@@ -298,7 +305,6 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/connectors': typeof ConnectorsRoute
   '/developer': typeof DeveloperRoute
-  '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
   '/metrics': typeof MetricsRoute
   '/org-required': typeof OrgRequiredRoute
@@ -316,12 +322,14 @@ export interface FileRoutesByTo {
   '/dashboards/templates': typeof DashboardsTemplatesRoute
   '/errors/$errorType': typeof ErrorsErrorTypeRoute
   '/infra/$hostName': typeof InfraHostNameRoute
+  '/logs/$logId': typeof LogsLogIdRoute
   '/services/$serviceName': typeof ServicesServiceNameRoute
   '/traces/$traceId': typeof TracesTraceIdRoute
   '/alerts': typeof AlertsIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
   '/errors': typeof ErrorsIndexRoute
   '/infra': typeof InfraIndexRoute
+  '/logs': typeof LogsIndexRoute
   '/services': typeof ServicesIndexRoute
   '/traces': typeof TracesIndexRoute
   '/errors/issues/$issueId': typeof ErrorsIssuesIssueIdRoute
@@ -340,7 +348,6 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/connectors': typeof ConnectorsRoute
   '/developer': typeof DeveloperRoute
-  '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
   '/metrics': typeof MetricsRoute
   '/org-required': typeof OrgRequiredRoute
@@ -358,12 +365,14 @@ export interface FileRoutesById {
   '/dashboards/templates': typeof DashboardsTemplatesRoute
   '/errors/$errorType': typeof ErrorsErrorTypeRoute
   '/infra/$hostName': typeof InfraHostNameRoute
+  '/logs/$logId': typeof LogsLogIdRoute
   '/services/$serviceName': typeof ServicesServiceNameRoute
   '/traces/$traceId': typeof TracesTraceIdRoute
   '/alerts/': typeof AlertsIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
   '/errors/': typeof ErrorsIndexRoute
   '/infra/': typeof InfraIndexRoute
+  '/logs/': typeof LogsIndexRoute
   '/services/': typeof ServicesIndexRoute
   '/traces/': typeof TracesIndexRoute
   '/errors/issues/$issueId': typeof ErrorsIssuesIssueIdRoute
@@ -383,7 +392,6 @@ export interface FileRouteTypes {
     | '/chat'
     | '/connectors'
     | '/developer'
-    | '/logs'
     | '/mcp'
     | '/metrics'
     | '/org-required'
@@ -401,12 +409,14 @@ export interface FileRouteTypes {
     | '/dashboards/templates'
     | '/errors/$errorType'
     | '/infra/$hostName'
+    | '/logs/$logId'
     | '/services/$serviceName'
     | '/traces/$traceId'
     | '/alerts/'
     | '/dashboards/'
     | '/errors/'
     | '/infra/'
+    | '/logs/'
     | '/services/'
     | '/traces/'
     | '/errors/issues/$issueId'
@@ -424,7 +434,6 @@ export interface FileRouteTypes {
     | '/chat'
     | '/connectors'
     | '/developer'
-    | '/logs'
     | '/mcp'
     | '/metrics'
     | '/org-required'
@@ -442,12 +451,14 @@ export interface FileRouteTypes {
     | '/dashboards/templates'
     | '/errors/$errorType'
     | '/infra/$hostName'
+    | '/logs/$logId'
     | '/services/$serviceName'
     | '/traces/$traceId'
     | '/alerts'
     | '/dashboards'
     | '/errors'
     | '/infra'
+    | '/logs'
     | '/services'
     | '/traces'
     | '/errors/issues/$issueId'
@@ -465,7 +476,6 @@ export interface FileRouteTypes {
     | '/chat'
     | '/connectors'
     | '/developer'
-    | '/logs'
     | '/mcp'
     | '/metrics'
     | '/org-required'
@@ -483,12 +493,14 @@ export interface FileRouteTypes {
     | '/dashboards/templates'
     | '/errors/$errorType'
     | '/infra/$hostName'
+    | '/logs/$logId'
     | '/services/$serviceName'
     | '/traces/$traceId'
     | '/alerts/'
     | '/dashboards/'
     | '/errors/'
     | '/infra/'
+    | '/logs/'
     | '/services/'
     | '/traces/'
     | '/errors/issues/$issueId'
@@ -507,7 +519,6 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   ConnectorsRoute: typeof ConnectorsRoute
   DeveloperRoute: typeof DeveloperRoute
-  LogsRoute: typeof LogsRoute
   McpRoute: typeof McpRoute
   MetricsRoute: typeof MetricsRoute
   OrgRequiredRoute: typeof OrgRequiredRoute
@@ -525,12 +536,14 @@ export interface RootRouteChildren {
   DashboardsTemplatesRoute: typeof DashboardsTemplatesRoute
   ErrorsErrorTypeRoute: typeof ErrorsErrorTypeRoute
   InfraHostNameRoute: typeof InfraHostNameRoute
+  LogsLogIdRoute: typeof LogsLogIdRoute
   ServicesServiceNameRoute: typeof ServicesServiceNameRoute
   TracesTraceIdRoute: typeof TracesTraceIdRoute
   AlertsIndexRoute: typeof AlertsIndexRoute
   DashboardsIndexRoute: typeof DashboardsIndexRoute
   ErrorsIndexRoute: typeof ErrorsIndexRoute
   InfraIndexRoute: typeof InfraIndexRoute
+  LogsIndexRoute: typeof LogsIndexRoute
   ServicesIndexRoute: typeof ServicesIndexRoute
   TracesIndexRoute: typeof TracesIndexRoute
   ErrorsIssuesIssueIdRoute: typeof ErrorsIssuesIssueIdRoute
@@ -623,13 +636,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/logs': {
-      id: '/logs'
-      path: '/logs'
-      fullPath: '/logs'
-      preLoaderRoute: typeof LogsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/developer': {
       id: '/developer'
       path: '/developer'
@@ -672,6 +678,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/logs/': {
+      id: '/logs/'
+      path: '/logs'
+      fullPath: '/logs/'
+      preLoaderRoute: typeof LogsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/infra/': {
       id: '/infra/'
       path: '/infra'
@@ -712,6 +725,13 @@ declare module '@tanstack/react-router' {
       path: '/services/$serviceName'
       fullPath: '/services/$serviceName'
       preLoaderRoute: typeof ServicesServiceNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs/$logId': {
+      id: '/logs/$logId'
+      path: '/logs/$logId'
+      fullPath: '/logs/$logId'
+      preLoaderRoute: typeof LogsLogIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/infra/$hostName': {
@@ -827,7 +847,6 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   ConnectorsRoute: ConnectorsRoute,
   DeveloperRoute: DeveloperRoute,
-  LogsRoute: LogsRoute,
   McpRoute: McpRoute,
   MetricsRoute: MetricsRoute,
   OrgRequiredRoute: OrgRequiredRoute,
@@ -845,12 +864,14 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardsTemplatesRoute: DashboardsTemplatesRoute,
   ErrorsErrorTypeRoute: ErrorsErrorTypeRoute,
   InfraHostNameRoute: InfraHostNameRoute,
+  LogsLogIdRoute: LogsLogIdRoute,
   ServicesServiceNameRoute: ServicesServiceNameRoute,
   TracesTraceIdRoute: TracesTraceIdRoute,
   AlertsIndexRoute: AlertsIndexRoute,
   DashboardsIndexRoute: DashboardsIndexRoute,
   ErrorsIndexRoute: ErrorsIndexRoute,
   InfraIndexRoute: InfraIndexRoute,
+  LogsIndexRoute: LogsIndexRoute,
   ServicesIndexRoute: ServicesIndexRoute,
   TracesIndexRoute: TracesIndexRoute,
   ErrorsIssuesIssueIdRoute: ErrorsIssuesIssueIdRoute,

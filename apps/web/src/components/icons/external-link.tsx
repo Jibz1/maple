@@ -1,17 +1,12 @@
 import type { IconProps } from "./icon"
 
 const paths: ReadonlyArray<string> = [
-	"M6 18.01L6 18",
-	"M18 7.01001L18 7.00001",
-	"M8 20.01L8 20",
-	"M2 16L4 16",
-	"M14 9L16 9",
-	"M20 5L22 5",
-	"M10 16L10 18",
-	"M12 11L12 14",
+	"M10 14L20 4",
+	"M15 4H20V9",
+	"M20 13V19C20 19.5523 19.5523 20 19 20H5C4.44772 20 4 19.5523 4 19V5C4 4.44772 4.44772 4 5 4H11",
 ]
 
-function PulseIcon({ size = 24, className, ...props }: IconProps) {
+function ExternalLinkIcon({ size = 24, className, ...props }: IconProps) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -29,4 +24,4 @@ function PulseIcon({ size = 24, className, ...props }: IconProps) {
 		</svg>
 	)
 }
-export { PulseIcon }
+export { ExternalLinkIcon }

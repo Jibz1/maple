@@ -25,6 +25,7 @@ import {
 	ServiceWorkloadsResponse,
 	ServiceUsageResponse,
 	ListLogsResponse,
+	GetLogResponse,
 	ListMetricsResponse,
 	MetricsSummaryResponse,
 	ListHostsResponse,
@@ -69,6 +70,15 @@ const mapExecError = <A, R>(
 			})
 		}),
 	)
+
+// Build a ±1h partition-pruning window around a ClickHouse datetime string
+// (`YYYY-MM-DD HH:mm:ss[.ffffff]`). Sub-second precision is irrelevant for the
+// window bounds, so the seconds-level prefix is parsed as UTC.
+const logWindowAround = (timestamp: string): { startTime: string; endTime: string } => {
+	const ms = Date.parse(`${timestamp.slice(0, 19).replace(" ", "T")}Z`)
+	const fmt = (epoch: number) => new Date(epoch).toISOString().replace("T", " ").slice(0, 19)
+	return { startTime: fmt(ms - 3_600_000), endTime: fmt(ms + 3_600_000) }
+}
 
 export const HttpQueryEngineLive = HttpApiBuilder.group(MapleApi, "queryEngine", (handlers) =>
 	Effect.gen(function* () {
@@ -574,6 +584,31 @@ export const HttpQueryEngineLive = HttpApiBuilder.group(MapleApi, "queryEngine",
 						),
 					)
 					return new ListLogsResponse({ data: rows as any[] })
+				}),
+			)
+			.handle("getLog", ({ payload }) =>
+				Effect.gen(function* () {
+					const tenant = yield* CurrentTenant.Context
+					// Bound the scan to a ±1h window around the requested log so
+					// ClickHouse can prune partitions instead of reading every
+					// retained daily partition for an exact-timestamp match.
+					const { startTime, endTime } = logWindowAround(payload.timestamp)
+					const compiled = CH.compile(
+						CH.getLogByKeyQuery({
+							serviceName: payload.serviceName,
+							traceId: payload.traceId,
+							spanId: payload.spanId,
+						}),
+						{ orgId: tenant.orgId, startTime, endTime, timestamp: payload.timestamp },
+					)
+					const rows = yield* mapExecError(
+						warehouse.sqlQuery(tenant, compiled.sql, {
+							profile: "list",
+							context: "getLog",
+						}),
+						"getLog query failed",
+					)
+					return new GetLogResponse({ data: rows as any[] })
 				}),
 			)
 			.handle("listMetrics", ({ payload }) =>
