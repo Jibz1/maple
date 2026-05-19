@@ -67,6 +67,7 @@ import {
 	TrashIcon,
 } from "@/components/icons"
 import { MapleApiAtomClient } from "@/lib/services/common/atom-client"
+import { AttributeKeyAutocomplete } from "./attribute-key-autocomplete"
 
 const SOURCE_CONTEXT_LABELS: Record<IngestMappingSourceContext, string> = {
 	span: "Span attribute",
@@ -394,20 +395,22 @@ export function AttributeMappingsSection() {
 						</div>
 						<div className="space-y-2">
 							<Label htmlFor="mapping-source-key">Source key</Label>
-							<Input
+							<AttributeKeyAutocomplete
 								id="mapping-source-key"
+								scope={formSourceContext}
 								placeholder="e.g. http.status_code"
 								value={formSourceKey}
-								onChange={(e) => setFormSourceKey(e.target.value)}
+								onValueChange={setFormSourceKey}
 							/>
 						</div>
 						<div className="space-y-2">
 							<Label htmlFor="mapping-target-key">Target span attribute key</Label>
-							<Input
+							<AttributeKeyAutocomplete
 								id="mapping-target-key"
+								scope="span"
 								placeholder="e.g. http.response.status_code"
 								value={formTargetKey}
-								onChange={(e) => setFormTargetKey(e.target.value)}
+								onValueChange={setFormTargetKey}
 							/>
 						</div>
 						<div className="space-y-2">
