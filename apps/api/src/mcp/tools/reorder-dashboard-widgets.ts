@@ -78,6 +78,7 @@ export function registerReorderDashboardWidgetsTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: `Invalid layouts_json: ${String(error)}`,
 							pipe: TOOL,
+							cause: error,
 						}),
 				),
 			)

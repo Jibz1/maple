@@ -30,7 +30,7 @@ export function registerFindErrorsTool(server: McpToolRegistrar) {
 				limit: limit ?? 20,
 			}).pipe(
 				Effect.provide(makeTinybirdExecutorFromTenant(tenant)),
-				Effect.mapError((e) => new McpQueryError({ message: e.message, pipe: "errors_by_type" })),
+				Effect.mapError((e) => new McpQueryError({ message: e.message, pipe: "errors_by_type", cause: e })),
 			)
 
 			if (errors.length === 0) {

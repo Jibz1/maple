@@ -85,6 +85,7 @@ export function registerUpdateErrorNotificationPolicyTool(server: McpToolRegistr
 						new McpQueryError({
 							message: `Invalid notification policy payload: ${String(error)}`,
 							pipe: "update_error_notification_policy",
+							cause: error,
 						}),
 				),
 			)
@@ -97,6 +98,7 @@ export function registerUpdateErrorNotificationPolicyTool(server: McpToolRegistr
 							new McpQueryError({
 								message: "message" in error ? error.message : String(error),
 								pipe: "update_error_notification_policy",
+								cause: error,
 							}),
 					),
 				)

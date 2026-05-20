@@ -598,7 +598,13 @@ const validateEvaluate = Effect.fn("QueryEngineService.validateEvaluate")(functi
 	return range
 })
 
-const mapTinybirdError = <A, R>(
+/**
+ * Annotate the current span with warehouse-error context on failure, without
+ * touching the error itself. The error type in equals the error type out — this
+ * is `Effect.tapError`, not a transformation. Named explicitly so call sites
+ * don't read like they're remapping errors.
+ */
+const annotateWarehouseError = <A, R>(
 	effect: Effect.Effect<A, TinybirdQueryError | TinybirdQuotaExceededError, R>,
 	context: string,
 ): Effect.Effect<A, TinybirdQueryError | TinybirdQuotaExceededError, R> =>
@@ -627,7 +633,7 @@ const executeCHQuery = <Output extends Record<string, any>, Params extends Recor
 	profile: QueryProfileName = "aggregation",
 ): Effect.Effect<ReadonlyArray<Output>, TinybirdQueryError | TinybirdQuotaExceededError> => {
 	const compiled = CH.compile(query, params)
-	return mapTinybirdError(
+	return annotateWarehouseError(
 		warehouse.sqlQuery(tenant, compiled.sql, { profile, context }),
 		context,
 	).pipe(Effect.map((rows) => compiled.castRows(rows)))
@@ -643,7 +649,7 @@ const executeCHUnionQuery = <Output extends Record<string, any>, Params extends 
 	profile: QueryProfileName = "aggregation",
 ): Effect.Effect<ReadonlyArray<Output>, TinybirdQueryError | TinybirdQuotaExceededError> => {
 	const compiled = CH.compileUnion(query, params)
-	return mapTinybirdError(
+	return annotateWarehouseError(
 		warehouse.sqlQuery(tenant, compiled.sql, { profile, context }),
 		context,
 	).pipe(Effect.map((rows) => compiled.castRows(rows)))
@@ -1012,7 +1018,7 @@ export const makeQueryEngineExecute = (warehouse: QueryEngineWarehouse) =>
 						bucketSeconds: bucketSeconds!,
 					},
 				)
-				const rawRows = yield* mapTinybirdError(
+				const rawRows = yield* annotateWarehouseError(
 					warehouse.sqlQuery(tenant, compiled.sql, {
 						profile: "aggregation",
 						context: "metrics rate/increase query",
@@ -1732,7 +1738,7 @@ export const makeQueryEngineEvaluateRawSql = (warehouse: QueryEngineWarehouse) =
 			),
 		)
 
-		const rows = yield* mapTinybirdError(
+		const rows = yield* annotateWarehouseError(
 			warehouse.sqlQuery(tenant, expanded.sql, { profile: "list", context: "alertRawQuery" }),
 			"alertRawQuery",
 		)

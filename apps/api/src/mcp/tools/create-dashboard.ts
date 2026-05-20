@@ -358,10 +358,11 @@ export function registerCreateDashboardTool(server: McpToolRegistrar) {
 					params.dashboard_json,
 				).pipe(
 					Effect.mapError(
-						() =>
+						(cause) =>
 							new McpQueryError({
 								message: "Invalid dashboard JSON",
 								pipe: "create_dashboard",
+								cause,
 							}),
 					),
 				)
@@ -388,6 +389,7 @@ export function registerCreateDashboardTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: `Widget generation error: ${String(error)}`,
 							pipe: "create_dashboard",
+							cause: error,
 						}),
 				})
 			} else if (templateName) {
@@ -445,6 +447,7 @@ export function registerCreateDashboardTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: `Template generation error: ${String(error)}`,
 							pipe: "create_dashboard",
+							cause: error,
 						}),
 				})
 			} else {
@@ -472,6 +475,7 @@ export function registerCreateDashboardTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: error.message,
 							pipe: "create_dashboard",
+							cause: error,
 						}),
 				),
 			)

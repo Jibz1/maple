@@ -29,10 +29,11 @@ export function registerListAlertChecksTool(server: McpToolRegistrar) {
 
 			const ruleId = yield* Effect.try({
 				try: () => decodeRuleId(rule_id),
-				catch: () =>
+				catch: (cause) =>
 					new McpQueryError({
 						message: `Invalid rule_id: ${rule_id}`,
 						pipe: "list_alert_checks",
+						cause,
 					}),
 			})
 
@@ -49,6 +50,7 @@ export function registerListAlertChecksTool(server: McpToolRegistrar) {
 							new McpQueryError({
 								message: error.message,
 								pipe: "list_alert_checks",
+								cause: error,
 							}),
 					),
 				)

@@ -29,7 +29,7 @@ export function registerServiceMapTool(server: McpToolRegistrar) {
 			}).pipe(
 				Effect.provide(makeTinybirdExecutorFromTenant(tenant)),
 				Effect.mapError(
-					(e) => new McpQueryError({ message: e.message, pipe: "service_dependencies" }),
+					(e) => new McpQueryError({ message: e.message, pipe: "service_dependencies", cause: e }),
 				),
 			)
 

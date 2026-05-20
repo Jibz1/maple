@@ -367,8 +367,11 @@ const makePersistenceError = (error: unknown) =>
 		message: error instanceof Error ? error.message : "Alert persistence failed",
 	})
 
-const makeValidationError = (message: string, details: ReadonlyArray<string> = []) =>
-	new AlertValidationError({ message, details })
+const makeValidationError = (
+	message: string,
+	details: ReadonlyArray<string> = [],
+	cause?: unknown,
+) => new AlertValidationError({ message, details, ...(cause === undefined ? {} : { cause }) })
 
 const makeDeliveryError = (message: string, destinationType?: AlertDestinationType) =>
 	new AlertDeliveryError({
@@ -428,19 +431,19 @@ const parsePublicConfig = (
 	row: AlertDestinationRow,
 ): Effect.Effect<DestinationPublicConfig, AlertValidationError> =>
 	Schema.decodeUnknownEffect(PublicConfigFromJson)(row.configJson).pipe(
-		Effect.mapError(() => makeValidationError("Stored destination config is invalid")),
+		Effect.mapError((cause) => makeValidationError("Stored destination config is invalid", [], cause)),
 	)
 
 const parseSecretConfig = (json: string): Effect.Effect<DestinationSecretConfig, AlertValidationError> =>
 	Schema.decodeUnknownEffect(SecretConfigFromJson)(json).pipe(
-		Effect.mapError(() => makeValidationError("Stored destination secret is invalid")),
+		Effect.mapError((cause) => makeValidationError("Stored destination secret is invalid", [], cause)),
 	)
 
 type StoredDeliveryPayloadType = Schema.Schema.Type<typeof StoredDeliveryPayloadSchema>
 
 const parseDeliveryPayload = (json: string): Effect.Effect<StoredDeliveryPayloadType, AlertValidationError> =>
 	Schema.decodeUnknownEffect(DeliveryPayloadFromJson)(json).pipe(
-		Effect.mapError(() => makeValidationError("Stored delivery payload is invalid")),
+		Effect.mapError((cause) => makeValidationError("Stored delivery payload is invalid", [], cause)),
 	)
 
 const summarizeWebhookUrl = (url: string) =>
@@ -708,7 +711,11 @@ const parseCompiledPlan = (
 			reducer: row.reducer,
 			sampleCountStrategy: null,
 			noDataBehavior: row.noDataBehavior,
-		}).pipe(Effect.mapError(() => makeValidationError("Stored compiled alert plan is invalid")))
+		}).pipe(
+			Effect.mapError((cause) =>
+				makeValidationError("Stored compiled alert plan is invalid", [], cause),
+			),
+		)
 	}
 	return Schema.decodeUnknownEffect(QuerySpecFromJson)(row.querySpecJson ?? "").pipe(
 		Effect.flatMap((query) =>
@@ -721,7 +728,9 @@ const parseCompiledPlan = (
 				noDataBehavior: row.noDataBehavior,
 			}),
 		),
-		Effect.mapError(() => makeValidationError("Stored compiled alert plan is invalid")),
+		Effect.mapError((cause) =>
+			makeValidationError("Stored compiled alert plan is invalid", [], cause),
+		),
 	)
 }
 
@@ -1035,7 +1044,9 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 			value: string,
 		): Effect.Effect<ReadonlyArray<AlertDestinationId>, AlertValidationError> =>
 			Schema.decodeUnknownEffect(DestinationIdArrayFromJson)(value).pipe(
-				Effect.mapError(() => makeValidationError("Stored rule destinations are invalid")),
+				Effect.mapError((cause) =>
+					makeValidationError("Stored rule destinations are invalid", [], cause),
+				),
 			)
 
 		const normalizeRuleRow = Effect.fn("AlertsService.normalizeRuleRow")(function* (

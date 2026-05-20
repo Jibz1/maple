@@ -100,6 +100,7 @@ export class IntegrationsUpstreamError extends Schema.TaggedErrorClass<Integrati
 	{
 		message: Schema.String,
 		status: Schema.optional(Schema.Number),
+		cause: Schema.optional(Schema.Unknown),
 	},
 	{ httpApiStatus: 502 },
 ) {}

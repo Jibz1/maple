@@ -52,7 +52,7 @@ export function registerMineLogPatternsTool(server: McpToolRegistrar) {
 				limit: lim,
 			}).pipe(
 				Effect.provide(makeTinybirdExecutorFromTenant(tenant)),
-				Effect.mapError((e) => new McpQueryError({ message: e.message, pipe: "list_logs" })),
+				Effect.mapError((e) => new McpQueryError({ message: e.message, pipe: "list_logs", cause: e })),
 			)
 
 			if (result.patterns.length === 0) {

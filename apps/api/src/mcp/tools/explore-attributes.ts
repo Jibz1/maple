@@ -40,7 +40,8 @@ export function registerExploreAttributesTool(server: McpToolRegistrar) {
 			const scope = (params.scope ?? "span") as "span" | "resource"
 			const tenant = yield* resolveTenant
 			const executorLayer = makeTinybirdExecutorFromTenant(tenant)
-			const mapError = (e: any) => new McpQueryError({ message: e.message, pipe: "explore_attributes" })
+			const mapError = (e: any) =>
+				new McpQueryError({ message: e.message, pipe: "explore_attributes", cause: e })
 
 			const baseInput = {
 				source: params.source as "traces" | "metrics" | "services",

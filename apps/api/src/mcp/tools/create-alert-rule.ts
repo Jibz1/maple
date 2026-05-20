@@ -300,6 +300,7 @@ export function registerCreateAlertRuleTool(server: McpToolRegistrar) {
 					new McpQueryError({
 						message: `Invalid alert rule: ${String(error)}`,
 						pipe: "create_alert_rule",
+						cause: error,
 					}),
 			})
 
@@ -312,6 +313,7 @@ export function registerCreateAlertRuleTool(server: McpToolRegistrar) {
 					return new McpQueryError({
 						message: `${error._tag}: ${error.message}${details}`,
 						pipe: "create_alert_rule",
+						cause: error,
 					})
 				}),
 			)

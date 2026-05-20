@@ -40,6 +40,7 @@ export function registerListAlertRulesTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: error.message,
 							pipe: "list_alert_rules",
+							cause: error,
 						}),
 				),
 			)

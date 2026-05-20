@@ -29,6 +29,7 @@ export function registerGetAlertRuleTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: error.message,
 							pipe: "get_alert_rule",
+							cause: error,
 						}),
 				),
 			)

@@ -45,10 +45,11 @@ export function registerUpdateDashboardTool(server: McpToolRegistrar) {
 			const portable = dashboard_json
 				? yield* Schema.decodeUnknownEffect(PortableDashboardFromJson)(dashboard_json).pipe(
 						Effect.mapError(
-							() =>
+							(cause) =>
 								new McpQueryError({
 									message: "Invalid dashboard JSON",
 									pipe: "update_dashboard",
+									cause,
 								}),
 						),
 					)
@@ -103,6 +104,7 @@ export function registerUpdateDashboardTool(server: McpToolRegistrar) {
 							new McpQueryError({
 								message: error.message,
 								pipe: "update_dashboard",
+								cause: error,
 							}),
 					),
 				)

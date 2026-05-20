@@ -21,6 +21,7 @@ export function registerGetDashboardTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: error.message,
 							pipe: "get_dashboard",
+							cause: error,
 						}),
 				),
 			)

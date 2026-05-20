@@ -55,7 +55,7 @@ export function registerSearchLogsTool(server: McpToolRegistrar) {
 				offset: off,
 			}).pipe(
 				Effect.provide(makeTinybirdExecutorFromTenant(tenant)),
-				Effect.mapError((e) => new McpQueryError({ message: e.message, pipe: "list_logs" })),
+				Effect.mapError((e) => new McpQueryError({ message: e.message, pipe: "list_logs", cause: e })),
 			)
 
 			if (result.logs.length === 0) {

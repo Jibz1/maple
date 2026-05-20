@@ -31,6 +31,7 @@ const jsonDecodeError = (field: string, tool: string) => (error: unknown) =>
 	new McpQueryError({
 		message: `Invalid ${field}: ${String(error)}`,
 		pipe: tool,
+		cause: error,
 	})
 
 export const decodeWidgetJson = (json: string, tool: string) =>
@@ -169,7 +170,7 @@ export const withDashboardMutation = <E, R>(
 						typeof (error as { message: unknown }).message === "string"
 							? (error as { message: string }).message
 							: String(error)
-					return new McpQueryError({ message, pipe: tool })
+					return new McpQueryError({ message, pipe: tool, cause: error })
 				}),
 			)
 	})

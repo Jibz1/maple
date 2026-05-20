@@ -62,6 +62,11 @@ const unauthorized = (message: string) =>
 		message,
 	})
 
+// NOTE: the decode helpers below deliberately discard the parse error and the
+// JWT helpers in `verifyHs256Jwt` do the same. Auth failures must NOT leak
+// validation hints (e.g. which schema field rejected the input) to unauthorized
+// callers — that's an oracle for credential stuffing. Do not refactor these to
+// preserve `cause`.
 const decodeOrgId = (value: string, message: string): Effect.Effect<OrgId, UnauthorizedError> =>
 	Schema.decodeUnknownEffect(OrgId)(value).pipe(Effect.mapError(() => unauthorized(message)))
 

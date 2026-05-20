@@ -164,6 +164,7 @@ export function registerInspectChartDataTool(server: McpToolRegistrar) {
 						new McpQueryError({
 							message: error.message,
 							pipe: "inspect_chart_data",
+							cause: error,
 						}),
 				),
 			)

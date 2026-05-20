@@ -129,8 +129,12 @@ const toPersistenceError = (cause: unknown) =>
 		message: cause instanceof Error ? cause.message : "Hazel integration database error",
 	})
 
-const toUpstreamError = (message: string, status?: number) =>
-	new IntegrationsUpstreamError({ message, ...(status === undefined ? {} : { status }) })
+const toUpstreamError = (message: string, status?: number, cause?: unknown) =>
+	new IntegrationsUpstreamError({
+		message,
+		...(status === undefined ? {} : { status }),
+		...(cause === undefined ? {} : { cause }),
+	})
 
 export interface HazelOAuthAccessToken {
 	readonly accessToken: string
@@ -294,11 +298,16 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 					}
 					const json = yield* Effect.tryPromise({
 						try: () => response.json(),
-						catch: () => toUpstreamError("OIDC discovery returned a non-JSON response"),
+						catch: (cause) =>
+							toUpstreamError("OIDC discovery returned a non-JSON response", undefined, cause),
 					})
 					return yield* decodeDiscoveryDocument(json).pipe(
-						Effect.mapError(() =>
-							toUpstreamError("OIDC discovery returned an unexpected payload"),
+						Effect.mapError((cause) =>
+							toUpstreamError(
+								"OIDC discovery returned an unexpected payload",
+								undefined,
+								cause,
+							),
 						),
 					)
 				})
@@ -434,7 +443,7 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 					if (!response.ok) {
 						const text = yield* Effect.tryPromise({
 							try: () => response.text(),
-							catch: () => toUpstreamError("Token exchange failed", response.status),
+							catch: (cause) => toUpstreamError("Token exchange failed", response.status, cause),
 						})
 						return yield* Effect.fail(
 							toUpstreamError(
@@ -445,11 +454,16 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 					}
 					const json = yield* Effect.tryPromise({
 						try: () => response.json(),
-						catch: () => toUpstreamError("Token exchange returned a non-JSON response"),
+						catch: (cause) =>
+							toUpstreamError("Token exchange returned a non-JSON response", undefined, cause),
 					})
 					return yield* decodeTokenResponse(json).pipe(
-						Effect.mapError(() =>
-							toUpstreamError("Token exchange returned an unexpected payload"),
+						Effect.mapError((cause) =>
+							toUpstreamError(
+								"Token exchange returned an unexpected payload",
+								undefined,
+								cause,
+							),
 						),
 					)
 				})
@@ -493,11 +507,16 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 					}
 					const json = yield* Effect.tryPromise({
 						try: () => response.json(),
-						catch: () => toUpstreamError("Token refresh returned a non-JSON response"),
+						catch: (cause) =>
+							toUpstreamError("Token refresh returned a non-JSON response", undefined, cause),
 					})
 					return yield* decodeTokenResponse(json).pipe(
-						Effect.mapError(() =>
-							toUpstreamError("Token refresh returned an unexpected payload"),
+						Effect.mapError((cause) =>
+							toUpstreamError(
+								"Token refresh returned an unexpected payload",
+								undefined,
+								cause,
+							),
 						),
 					)
 				})
@@ -526,10 +545,13 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 					}
 					const json = yield* Effect.tryPromise({
 						try: () => response.json(),
-						catch: () => toUpstreamError("Userinfo returned a non-JSON response"),
+						catch: (cause) =>
+							toUpstreamError("Userinfo returned a non-JSON response", undefined, cause),
 					})
 					return yield* decodeUserInfo(json).pipe(
-						Effect.mapError(() => toUpstreamError("Userinfo returned an unexpected payload")),
+						Effect.mapError((cause) =>
+							toUpstreamError("Userinfo returned an unexpected payload", undefined, cause),
+						),
 					)
 				})
 
@@ -758,11 +780,20 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 				}
 				const json = yield* Effect.tryPromise({
 					try: () => response.json(),
-					catch: () => toUpstreamError("Hazel organizations returned a non-JSON response"),
+					catch: (cause) =>
+						toUpstreamError(
+							"Hazel organizations returned a non-JSON response",
+							undefined,
+							cause,
+						),
 				})
 				const decoded = yield* decodeOrganizationsResponse(json).pipe(
-					Effect.mapError(() =>
-						toUpstreamError("Hazel organizations returned an unexpected payload"),
+					Effect.mapError((cause) =>
+						toUpstreamError(
+							"Hazel organizations returned an unexpected payload",
+							undefined,
+							cause,
+						),
 					),
 				)
 				return decoded.data.map((o) => ({
@@ -816,10 +847,13 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 				}
 				const json = yield* Effect.tryPromise({
 					try: () => response.json(),
-					catch: () => toUpstreamError("Hazel channels returned a non-JSON response"),
+					catch: (cause) =>
+						toUpstreamError("Hazel channels returned a non-JSON response", undefined, cause),
 				})
 				const decoded = yield* decodeChannelsResponse(json).pipe(
-					Effect.mapError(() => toUpstreamError("Hazel channels returned an unexpected payload")),
+					Effect.mapError((cause) =>
+						toUpstreamError("Hazel channels returned an unexpected payload", undefined, cause),
+					),
 				)
 				return decoded.data.map((c) => ({
 					id: c.id,
@@ -895,11 +929,20 @@ export class HazelOAuthService extends Context.Service<HazelOAuthService, HazelO
 				}
 				const json = yield* Effect.tryPromise({
 					try: () => response.json(),
-					catch: () => toUpstreamError("Hazel webhook provisioning returned a non-JSON response"),
+					catch: (cause) =>
+						toUpstreamError(
+							"Hazel webhook provisioning returned a non-JSON response",
+							undefined,
+							cause,
+						),
 				})
 				return yield* decodeChannelWebhookResponse(json).pipe(
-					Effect.mapError(() =>
-						toUpstreamError("Hazel webhook provisioning returned an unexpected payload"),
+					Effect.mapError((cause) =>
+						toUpstreamError(
+							"Hazel webhook provisioning returned an unexpected payload",
+							undefined,
+							cause,
+						),
 					),
 				)
 			})
