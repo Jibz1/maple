@@ -1,7 +1,6 @@
 import type { ReactNode } from "react"
 import {
 	Body,
-	Button,
 	Container,
 	Head,
 	Hr,
@@ -17,32 +16,32 @@ import {
 const DISCORD_URL = "https://discord.gg/R76jTA4HbJ"
 const BOOK_CALL_URL = "https://cal.com/david-granzin/30min"
 
-// -- Tailwind config matching Maple dark theme (shared with weekly-digest) --
+/** OpenTelemetry quickstart in the public docs. */
+const OTEL_QUICKSTART_URL = "https://maple.dev/docs/quickstart"
 
+/**
+ * Plain-text-feeling shell — no logo, no branded buttons, no orange accents.
+ * The goal is to render like a personal note typed in Gmail, not a marketing
+ * layout. CTAs are inline `<Link>` elements inside the body copy.
+ */
 const tailwindConfig = {
 	theme: {
 		extend: {
 			colors: {
-				maple: {
-					bg: "#141210",
-					surface: "#1e1b18",
-					card: "#262320",
-					border: "#3a342e",
-					fg: "#e8dfd3",
-					"fg-muted": "#8a7f72",
-					"fg-dim": "#5c554c",
-					orange: "#e8872a",
-					green: "#4aa865",
-				},
+				body: "#222222",
+				muted: "#666666",
+				dim: "#999999",
+				link: "#2563eb",
 			},
 			fontFamily: {
-				mono: [
-					"'SFMono-Regular'",
-					"'SF Mono'",
-					"Menlo",
-					"Consolas",
-					"'Liberation Mono'",
-					"monospace",
+				sans: [
+					"-apple-system",
+					"BlinkMacSystemFont",
+					"'Segoe UI'",
+					"Roboto",
+					"Helvetica",
+					"Arial",
+					"sans-serif",
 				],
 			},
 		},
@@ -51,74 +50,38 @@ const tailwindConfig = {
 
 interface ShellProps {
 	preview: string
-	heading: string
 	children: ReactNode
-	ctaLabel: string
-	ctaUrl: string
-	footerNote?: string
+	signoffName?: string
 }
 
-function OnboardingEmailShell({
-	preview,
-	heading,
-	children,
-	ctaLabel,
-	ctaUrl,
-	footerNote,
-}: ShellProps) {
+function PersonalEmailShell({ preview, children, signoffName = "David" }: ShellProps) {
 	return (
 		<Html>
 			<Head />
 			<Preview>{preview}</Preview>
 			<Tailwind config={tailwindConfig}>
-				<Body className="m-0 bg-maple-bg px-4 py-10 font-mono">
-					<Container className="mx-auto max-w-[520px] overflow-hidden rounded-xl border border-maple-border bg-maple-surface">
-						<Section className="px-6 pb-2 pt-6">
-							<table cellPadding={0} cellSpacing={0} role="presentation">
-								<tbody>
-									<tr>
-										<td
-											style={{
-												width: "32px",
-												height: "32px",
-												backgroundColor: "#e8872a",
-												borderRadius: "8px",
-												textAlign: "center",
-												color: "#141210",
-												fontWeight: 700,
-												fontSize: "18px",
-											}}
-										>
-											M
-										</td>
-									</tr>
-								</tbody>
-							</table>
-						</Section>
+				<Body className="m-0 bg-white px-4 py-10 font-sans">
+					<Container className="mx-auto max-w-[560px]">
+						<Section>{children}</Section>
 
-						<Section className="px-6 pt-4">
-							<Text className="m-0 text-[20px] font-semibold leading-tight text-maple-fg">
-								{heading}
+						<Section className="pt-3">
+							<Text className="m-0 mb-1 text-[14px] leading-relaxed text-body">
+								Cheers,
+							</Text>
+							<Text className="m-0 text-[14px] leading-relaxed text-body">
+								{signoffName}
+							</Text>
+							<Text className="m-0 mt-1 text-[13px] leading-relaxed text-muted">
+								Founder, Maple
 							</Text>
 						</Section>
 
-						<Section className="px-6 pt-3">{children}</Section>
+						<Hr className="my-6 border-0 border-t border-[#eeeeee]" />
 
-						<Section className="px-6 pb-2 pt-5">
-							<Button
-								href={ctaUrl}
-								className="rounded-lg bg-maple-orange px-5 py-3 text-[13px] font-semibold text-maple-bg"
-							>
-								{ctaLabel}
-							</Button>
-						</Section>
-
-						<Hr className="mx-6 my-5 border-maple-border" />
-
-						<Section className="px-6 pb-6">
-							<Text className="m-0 text-[11px] leading-relaxed text-maple-fg-dim">
-								{footerNote ??
-									"You're receiving this because you started a Maple workspace. Manage email preferences in your account settings."}
+						<Section>
+							<Text className="m-0 text-[11px] leading-relaxed text-dim">
+								You're receiving this because you started a Maple workspace.
+								Manage email preferences in your account settings.
 							</Text>
 						</Section>
 					</Container>
@@ -128,9 +91,35 @@ function OnboardingEmailShell({
 	)
 }
 
-function Paragraph({ children }: { children: React.ReactNode }) {
+/** Body paragraph — base sans-serif, near-black, comfortable line height. */
+function Paragraph({ children }: { children: ReactNode }) {
+	return <Text className="m-0 mb-4 text-[14px] leading-relaxed text-body">{children}</Text>
+}
+
+/** A single numbered tip rendered on its own line. */
+function Tip({ index, children }: { index: number; children: ReactNode }) {
 	return (
-		<Text className="m-0 mb-3 text-[13px] leading-relaxed text-maple-fg-muted">{children}</Text>
+		<Text className="m-0 mb-2 text-[14px] leading-relaxed text-body">
+			{index}. {children}
+		</Text>
+	)
+}
+
+/** Inline link styled like a plain hyperlink. */
+function InlineLink({ href, children }: { href: string; children: ReactNode }) {
+	return (
+		<Link href={href} className="text-link underline">
+			{children}
+		</Link>
+	)
+}
+
+/** P.S. paragraph — slightly muted, follows the tips. */
+function PostScript({ children }: { children: ReactNode }) {
+	return (
+		<Text className="m-0 mb-4 mt-2 text-[14px] leading-relaxed text-body">
+			<strong>P.S.</strong> {children}
+		</Text>
 	)
 }
 
@@ -143,26 +132,37 @@ export interface WelcomeEmailProps {
 
 export function WelcomeEmail({ dashboardUrl, trialDays }: WelcomeEmailProps) {
 	return (
-		<OnboardingEmailShell
-			preview="Welcome to Maple — here's how to see your first trace"
-			heading="Welcome to Maple"
-			ctaLabel="Open your setup checklist"
-			ctaUrl={dashboardUrl}
-		>
+		<PersonalEmailShell preview="Welcome to Maple — a personal note from David">
+			<Paragraph>Hey,</Paragraph>
+			<Paragraph>My name is David — I'm the founder of Maple.</Paragraph>
 			<Paragraph>
-				Your workspace is ready. Maple gives you traces, logs, and metrics from your
-				services in one place — the moment they start sending telemetry.
+				We started Maple because we wanted observability that doesn't suck — no
+				six-figure invoice, no sales call before you can see your first trace, just
+				traces, logs, and metrics in one place the moment your services start sending
+				them.
 			</Paragraph>
-			<Paragraph>
-				{trialDays
-					? `Your ${trialDays}-day trial is running. To get value from it, connect an app: open the setup checklist on your dashboard, copy your ingest key, and drop in the snippet for your stack.`
-					: "To get started, open the setup checklist on your dashboard, copy your ingest key, and drop in the snippet for your stack."}
-			</Paragraph>
-			<Paragraph>
-				Not ready to instrument code yet? The checklist has a "Send a test event" button
-				that confirms your pipeline works in one click.
-			</Paragraph>
-		</OnboardingEmailShell>
+			{trialDays ? (
+				<Paragraph>
+					Your {trialDays}-day trial is running. Here are 3 things to do to get value
+					from it:
+				</Paragraph>
+			) : (
+				<Paragraph>Here are 3 things to do to get started:</Paragraph>
+			)}
+			<Tip index={1}>
+				<InlineLink href={dashboardUrl}>Open your setup checklist</InlineLink>
+			</Tip>
+			<Tip index={2}>
+				<InlineLink href={dashboardUrl}>Send a test event from your dashboard</InlineLink>
+			</Tip>
+			<Tip index={3}>
+				<InlineLink href={OTEL_QUICKSTART_URL}>Read the OpenTelemetry quickstart</InlineLink>
+			</Tip>
+			<PostScript>
+				Why did you sign up? What are you trying to debug? Hit "Reply" and let me know —
+				I read and reply to every email.
+			</PostScript>
+		</PersonalEmailShell>
 	)
 }
 
@@ -172,22 +172,29 @@ export interface ConnectAppEmailProps {
 
 export function ConnectAppEmail({ dashboardUrl }: ConnectAppEmailProps) {
 	return (
-		<OnboardingEmailShell
-			preview="Connect your app to start getting value from Maple"
-			heading="Your workspace is waiting for data"
-			ctaLabel="Connect your app"
-			ctaUrl={dashboardUrl}
-		>
+		<PersonalEmailShell preview="Your Maple workspace is still waiting for data">
+			<Paragraph>Hey, it's David again.</Paragraph>
 			<Paragraph>
-				You set up a Maple workspace, but we haven't seen any telemetry from your services
-				yet. Maple only becomes useful once your app is sending traces.
+				Your workspace is set up, but I haven't seen any telemetry from your services
+				yet. Maple only really becomes useful once your app is sending traces — so I
+				wanted to nudge you with a few ways to get unblocked.
 			</Paragraph>
-			<Paragraph>
-				It takes a few minutes: open the setup checklist, pick your stack, and paste the
-				snippet. If you use Claude Code, Codex, or Cursor, the checklist also has a one-line
-				prompt that installs OpenTelemetry across your repo automatically.
-			</Paragraph>
-		</OnboardingEmailShell>
+			<Tip index={1}>
+				<InlineLink href={dashboardUrl}>Open the setup checklist</InlineLink>{" "}
+				— pick your stack and copy-paste the snippet.
+			</Tip>
+			<Tip index={2}>
+				Paste a one-line prompt into Claude Code, Cursor, or Codex — it instruments your
+				whole repo with OpenTelemetry automatically. The checklist has the prompt.
+			</Tip>
+			<Tip index={3}>
+				Or grab the manual snippet for your language and drop it in.
+			</Tip>
+			<PostScript>
+				Stuck on which exporter to use? Hit "Reply" with your stack and I'll point you
+				at the right snippet.
+			</PostScript>
+		</PersonalEmailShell>
 	)
 }
 
@@ -197,44 +204,35 @@ export interface StalledEmailProps {
 
 export function StalledEmail({ dashboardUrl }: StalledEmailProps) {
 	return (
-		<OnboardingEmailShell
-			preview="Stuck connecting your app to Maple? We can help"
-			heading="Need a hand connecting your app?"
-			ctaLabel="Open the setup checklist"
-			ctaUrl={dashboardUrl}
-			footerNote="Reply to this email if you'd like help getting set up — a real person will read it."
-		>
+		<PersonalEmailShell preview="Stuck connecting your app to Maple? I'd like to help">
+			<Paragraph>Hey, it's David.</Paragraph>
 			<Paragraph>
-				It's been a few days and your Maple workspace still hasn't received any telemetry.
-				If something got in the way, we'd like to help.
+				It's been a few days and I haven't seen any telemetry land in your workspace. If
+				something got in the way, I'd really like to know what.
 			</Paragraph>
 			<Paragraph>
-				Common blockers: the ingest key isn't on the exporter, the OTLP endpoint URL is
-				missing the signal path, or the service hasn't been redeployed yet. The setup
-				checklist has copy-paste snippets for every supported stack.
+				The usual culprits: the ingest key isn't on the exporter, the OTLP endpoint URL
+				is missing the signal path (`/v1/traces`, `/v1/logs`…), or the service hasn't
+				been redeployed yet.
 			</Paragraph>
-			<Text className="m-0 mb-2 text-[13px] font-semibold leading-relaxed text-maple-fg">
-				Two faster ways to get unstuck:
-			</Text>
-			<Text className="m-0 mb-2 text-[13px] leading-relaxed text-maple-fg-muted">
-				{"· "}
-				<Link href={DISCORD_URL} className="text-maple-orange underline">
-					Join our Discord
-				</Link>
-				{" — quick questions get quick answers from the team."}
-			</Text>
-			<Text className="m-0 mb-3 text-[13px] leading-relaxed text-maple-fg-muted">
-				{"· "}
-				<Link href={BOOK_CALL_URL} className="text-maple-orange underline">
-					Book a 30-minute call
-				</Link>
-				{" — walk through setup live with David."}
-			</Text>
-			<Paragraph>
-				Want to explore Maple first without wiring up your own app? You can load a demo
-				workspace with realistic traces and errors from the dashboard.
-			</Paragraph>
-		</OnboardingEmailShell>
+			<Paragraph>Three faster ways to get unstuck:</Paragraph>
+			<Tip index={1}>
+				<InlineLink href={dashboardUrl}>Open the setup checklist</InlineLink>{" "}
+				— it has copy-paste snippets for every supported stack.
+			</Tip>
+			<Tip index={2}>
+				<InlineLink href={DISCORD_URL}>Ping me in our Discord</InlineLink>{" "}
+				— quick questions get quick answers.
+			</Tip>
+			<Tip index={3}>
+				<InlineLink href={BOOK_CALL_URL}>Book 30 minutes with me</InlineLink>{" "}
+				— we'll walk through setup live.
+			</Tip>
+			<PostScript>
+				What got you stuck? Even a one-line reply helps me figure out what to fix next —
+				I read every one.
+			</PostScript>
+		</PersonalEmailShell>
 	)
 }
 
@@ -245,22 +243,29 @@ export interface ActivationEmailProps {
 
 export function ActivationEmail({ dashboardUrl, serviceName }: ActivationEmailProps) {
 	return (
-		<OnboardingEmailShell
-			preview="Your first trace landed in Maple — you're live"
-			heading="You're live on Maple"
-			ctaLabel="Explore your traces"
-			ctaUrl={dashboardUrl}
-		>
+		<PersonalEmailShell preview="Your first trace landed in Maple — you're live">
+			<Paragraph>Hey, it's David.</Paragraph>
 			<Paragraph>
-				{serviceName
-					? `We're now seeing telemetry from ${serviceName}. Your workspace is live.`
-					: "We're now seeing telemetry from your services. Your workspace is live."}
+				Just saw the first traces land from{" "}
+				<strong>{serviceName ?? "your services"}</strong>. You're live on Maple.
 			</Paragraph>
-			<Paragraph>
-				Here's what to do next: open a slow trace to see its full span waterfall, check the
-				service map to understand how your services call each other, and set up an alert so
-				Maple tells you when something breaks.
-			</Paragraph>
-		</OnboardingEmailShell>
+			<Paragraph>Three things worth trying today:</Paragraph>
+			<Tip index={1}>
+				<InlineLink href={dashboardUrl}>Open a slow trace</InlineLink>{" "}
+				and walk the span waterfall — that's usually where the surprises are.
+			</Tip>
+			<Tip index={2}>
+				<InlineLink href={dashboardUrl}>Check the service map</InlineLink>{" "}
+				to see how your services call each other.
+			</Tip>
+			<Tip index={3}>
+				<InlineLink href={dashboardUrl}>Wire up your first alert</InlineLink>{" "}
+				so Maple tells you when something breaks.
+			</Tip>
+			<PostScript>
+				What's the first thing you want Maple to catch for you? Hit "Reply" and tell me —
+				it genuinely helps me prioritize what we build next.
+			</PostScript>
+		</PersonalEmailShell>
 	)
 }

@@ -18,6 +18,13 @@ import { WarehouseQueryService } from "./WarehouseQueryService"
 const SYSTEM_ONBOARDING_USER = UserId.make("system-onboarding")
 const ROOT_ROLE = RoleName.make("root")
 
+/**
+ * Reply-To for the founder-voice onboarding emails. Replies land in David's
+ * inbox instead of the unattended `RESEND_FROM_EMAIL` so the "I read every
+ * email" promise in the copy is actually true.
+ */
+const FOUNDER_REPLY_EMAIL = "david@maple.dev"
+
 const DAY_MS = 24 * 60 * 60 * 1000
 /** Wait this long with no telemetry before nudging the user to connect an app. */
 const CONNECT_NUDGE_AFTER_MS = DAY_MS
@@ -263,7 +270,7 @@ export class OnboardingEmailService extends Context.Service<OnboardingEmailServi
 								}
 
 								const html = yield* renderEmail(template)
-								yield* email.send(row.email, subject, html)
+								yield* email.send(row.email, subject, html, FOUNDER_REPLY_EMAIL)
 								yield* onboarding.markEmailSent(orgId, field)
 
 								return { sent: true, failed: false, firstDataDetected }

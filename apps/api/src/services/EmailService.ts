@@ -10,7 +10,12 @@ export class EmailDeliveryError extends Schema.TaggedErrorClass<EmailDeliveryErr
 
 export interface EmailServiceShape {
 	readonly isConfigured: boolean
-	readonly send: (to: string, subject: string, html: string) => Effect.Effect<void, EmailDeliveryError>
+	readonly send: (
+		to: string,
+		subject: string,
+		html: string,
+		replyTo?: string,
+	) => Effect.Effect<void, EmailDeliveryError>
 }
 
 const EMAIL_TIMEOUT = Duration.seconds(15)
@@ -23,10 +28,16 @@ export class EmailService extends Context.Service<EmailService, EmailServiceShap
 
 		const isConfigured = Option.isSome(apiKey)
 
-		const send = Effect.fn("EmailService.send")(function* (to: string, subject: string, html: string) {
+		const send = Effect.fn("EmailService.send")(function* (
+			to: string,
+			subject: string,
+			html: string,
+			replyTo?: string,
+		) {
 			yield* Effect.annotateCurrentSpan("email.to", to)
 			yield* Effect.annotateCurrentSpan("email.subject", subject)
 			yield* Effect.annotateCurrentSpan("email.provider", "resend")
+			if (replyTo) yield* Effect.annotateCurrentSpan("email.reply_to", replyTo)
 
 			if (Option.isNone(apiKey)) {
 				return yield* Effect.fail(
@@ -49,6 +60,7 @@ export class EmailService extends Context.Service<EmailService, EmailServiceShap
 							to: [to],
 							subject,
 							html,
+							...(replyTo ? { reply_to: replyTo } : {}),
 						}),
 					}),
 				catch: (error) =>
