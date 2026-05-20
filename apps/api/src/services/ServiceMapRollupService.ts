@@ -27,6 +27,7 @@ export interface ServiceMapRollupResult {
 	readonly orgsProcessed: number
 	readonly hoursRolledUp: number
 	readonly edgesWritten: number
+	readonly resolutionsWritten: number
 	readonly orgFailures: number
 }
 
@@ -92,12 +93,12 @@ export class ServiceMapRollupService extends Context.Service<
 
 			let hoursRolledUp = 0
 			let edgesWritten = 0
+			let resolutionsWritten = 0
 			for (const hourMs of missing) {
-				const rollup = CH.serviceMapEdgesRollupSQL({
-					orgId,
-					hourStart: toTinybirdDateTime(hourMs),
-					hourEnd: toTinybirdDateTime(hourMs + HOUR_MS),
-				})
+				const hourStart = toTinybirdDateTime(hourMs)
+				const hourEnd = toTinybirdDateTime(hourMs + HOUR_MS)
+
+				const rollup = CH.serviceMapEdgesRollupSQL({ orgId, hourStart, hourEnd })
 				const raw = yield* warehouse.sqlQuery(tenant, rollup.sql, {
 					context: "serviceMapRollup",
 				})
@@ -106,9 +107,40 @@ export class ServiceMapRollupService extends Context.Service<
 					yield* warehouse.ingest(tenant, "service_map_edges_hourly", rows)
 					edgesWritten += rows.length
 				}
+
+				// Companion write: address-resolutions, used by the external-edges
+				// query's anti-join to suppress internal-service overlap. Separate
+				// SQL pass (~same cost as the edges JOIN) so the existing rollup
+				// query keeps its tight shape; failure of one ingest doesn't
+				// invalidate the other (per-org Effect failure already isolated).
+				//
+				// NOTE: the hour is marked "done" purely by the presence of an edges
+				// row (see `serviceMapEdgesExistingHoursSQL`). If the edges write
+				// succeeds but the resolutions write fails (warehouse error, ingest
+				// throttling), the next tick will skip the hour and the resolutions
+				// gap is permanent — manifesting as internal-service HTTP calls
+				// leaking into the Dependencies "External" tab for that window.
+				// Backfill = re-running this rollup with the edges row deleted.
+				const resolutionsRollup = CH.serviceMapResolutionsRollupSQL({
+					orgId,
+					hourStart,
+					hourEnd,
+				})
+				const resolutionsRaw = yield* warehouse.sqlQuery(tenant, resolutionsRollup.sql, {
+					context: "serviceMapResolutionsRollup",
+				})
+				const resolutionsRows = resolutionsRollup.castRows(resolutionsRaw)
+				if (resolutionsRows.length > 0) {
+					yield* warehouse.ingest(
+						tenant,
+						"service_address_resolutions_hourly",
+						resolutionsRows,
+					)
+					resolutionsWritten += resolutionsRows.length
+				}
 				hoursRolledUp += 1
 			}
-			return { hoursRolledUp, edgesWritten, failed: false }
+			return { hoursRolledUp, edgesWritten, resolutionsWritten, failed: false }
 		})
 
 		const runRollupTick: ServiceMapRollupServiceShape["runRollupTick"] = Effect.fn(
@@ -130,7 +162,12 @@ export class ServiceMapRollupService extends Context.Service<
 										error: Cause.pretty(cause),
 									}),
 								),
-								{ hoursRolledUp: 0, edgesWritten: 0, failed: true },
+								{
+									hoursRolledUp: 0,
+									edgesWritten: 0,
+									resolutionsWritten: 0,
+									failed: true,
+								},
 							),
 						),
 					),
@@ -141,6 +178,7 @@ export class ServiceMapRollupService extends Context.Service<
 				orgsProcessed: orgRows.length,
 				hoursRolledUp: results.reduce((sum, r) => sum + r.hoursRolledUp, 0),
 				edgesWritten: results.reduce((sum, r) => sum + r.edgesWritten, 0),
+				resolutionsWritten: results.reduce((sum, r) => sum + r.resolutionsWritten, 0),
 				orgFailures: results.filter((r) => r.failed).length,
 			}
 		})
