@@ -9,7 +9,7 @@ import {
 	type OrgId,
 } from "@maple/domain/http"
 import { and, eq, inArray } from "drizzle-orm"
-import { Context, Effect, Layer, Redacted } from "effect"
+import { Clock, Context, Effect, Layer, Redacted } from "effect"
 import {
 	buildAlertChatUrl,
 	dispatchDelivery as dispatchDeliveryImpl,
@@ -62,7 +62,7 @@ export interface NotificationDispatcherShape {
 export class NotificationDispatcher extends Context.Service<
 	NotificationDispatcher,
 	NotificationDispatcherShape
->()("NotificationDispatcher", {
+>()("@maple/api/services/NotificationDispatcher", {
 	make: Effect.gen(function* () {
 		const database = yield* Database
 		const env = yield* Env
@@ -135,7 +135,7 @@ export class NotificationDispatcher extends Context.Service<
 					},
 					linkUrl: request.linkUrl,
 					chatUrl,
-					sentAt: new Date().toISOString(),
+					sentAt: new Date(yield* Clock.currentTimeMillis).toISOString(),
 				})
 				return yield* dispatchDeliveryImpl(
 					context,
@@ -204,6 +204,4 @@ export class NotificationDispatcher extends Context.Service<
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 }

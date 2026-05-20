@@ -299,7 +299,7 @@ export interface ErrorsServiceShape {
 	>
 }
 
-export class ErrorsService extends Context.Service<ErrorsService, ErrorsServiceShape>()("ErrorsService", {
+export class ErrorsService extends Context.Service<ErrorsService, ErrorsServiceShape>()("@maple/api/services/ErrorsService", {
 	make: Effect.gen(function* () {
 		const database = yield* Database
 		const warehouse = yield* WarehouseQueryService
@@ -2258,6 +2258,4 @@ export class ErrorsService extends Context.Service<ErrorsService, ErrorsServiceS
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 }

@@ -29,7 +29,7 @@ import {
 } from "@maple/domain/clickhouse"
 import { orgClickHouseSettings } from "@maple/db"
 import { eq } from "drizzle-orm"
-import { Effect, Layer, Option, Redacted, Schema, Context } from "effect"
+import { Clock, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import {
 	decryptAes256Gcm,
 	encryptAes256Gcm,
@@ -473,7 +473,7 @@ const parseJsonEachRow = <T>(text: string): ReadonlyArray<T> => {
 export class OrgClickHouseSettingsService extends Context.Service<
 	OrgClickHouseSettingsService,
 	OrgClickHouseSettingsServiceShape
->()("OrgClickHouseSettingsService", {
+>()("@maple/api/services/OrgClickHouseSettingsService", {
 	make: Effect.gen(function* () {
 		const database = yield* Database
 		const env = yield* Env
@@ -614,7 +614,7 @@ export class OrgClickHouseSettingsService extends Context.Service<
 			const encryptedPassword =
 				plainPassword.length > 0 ? yield* encryptToken(plainPassword, encryptionKey) : null
 
-			const now = Date.now()
+			const now = yield* Clock.currentTimeMillis
 			yield* database
 				.execute((db) =>
 					db
@@ -807,7 +807,7 @@ export class OrgClickHouseSettingsService extends Context.Service<
 				// `up_to_date` entries are silently passed over.
 			}
 
-			const now = Date.now()
+			const now = yield* Clock.currentTimeMillis
 			const allSatisfied = entries.every(
 				(e) =>
 					e.status === "up_to_date" ||
@@ -882,8 +882,6 @@ export class OrgClickHouseSettingsService extends Context.Service<
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 
 	static readonly get = (orgId: OrgId, roles: ReadonlyArray<RoleName>) =>
 		this.use((service) => service.get(orgId, roles))

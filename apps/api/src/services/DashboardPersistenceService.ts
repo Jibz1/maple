@@ -19,7 +19,7 @@ import {
 } from "@maple/domain/http"
 import { dashboards, dashboardVersions, type DashboardVersionRow } from "@maple/db"
 import { and, desc, eq, lt } from "drizzle-orm"
-import { Effect, Layer, Option, Schema, Context } from "effect"
+import { Clock, Effect, Layer, Option, Schema, Context } from "effect"
 import { randomUUID } from "node:crypto"
 import { Database } from "./DatabaseLive"
 import { summarizeDashboardChange } from "./dashboard-changes"
@@ -112,7 +112,7 @@ type VersionOptions = {
 }
 
 export class DashboardPersistenceService extends Context.Service<DashboardPersistenceService>()(
-	"DashboardPersistenceService",
+	"@maple/api/services/DashboardPersistenceService",
 	{
 		make: Effect.gen(function* () {
 			const database = yield* Database
@@ -152,7 +152,7 @@ export class DashboardPersistenceService extends Context.Service<DashboardPersis
 					const kind = options.forceKind ?? summary.kind
 					const summaryText = options.forceSummary ?? summary.summary
 					const snapshotJson = yield* stringifyPayload(dashboard)
-					const now = Date.now()
+					const now = yield* Clock.currentTimeMillis
 
 					const latest: ReadonlyArray<DashboardVersionRow> = yield* database
 						.execute((db) =>
@@ -588,9 +588,12 @@ export class DashboardPersistenceService extends Context.Service<DashboardPersis
 			) {
 				const detail = yield* getVersion(orgId, dashboardId, versionId)
 
+				const nowIso = decodeIsoDateTimeStringSync(
+					new Date(yield* Clock.currentTimeMillis).toISOString(),
+				)
 				const restored = new DashboardDocument({
 					...detail.snapshot,
-					updatedAt: decodeIsoDateTimeStringSync(new Date().toISOString()),
+					updatedAt: nowIso,
 				})
 
 				return yield* upsertInternal(orgId, userId, restored, {
@@ -614,8 +617,6 @@ export class DashboardPersistenceService extends Context.Service<DashboardPersis
 	},
 ) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 
 	static readonly list = (orgId: OrgId) => this.use((service) => service.list(orgId))
 

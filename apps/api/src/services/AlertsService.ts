@@ -88,6 +88,7 @@ import {
 	Match,
 	Metric,
 	Option,
+	Random,
 	Redacted,
 	Ref,
 	Schema,
@@ -317,17 +318,15 @@ export interface AlertRuntimeShape {
 	readonly deliveryTimeoutMs: () => number
 }
 
-export class AlertRuntime extends Context.Service<AlertRuntime, AlertRuntimeShape>()("AlertRuntime", {
+export class AlertRuntime extends Context.Service<AlertRuntime, AlertRuntimeShape>()("@maple/api/services/AlertRuntime", {
 	make: Effect.succeed({
-		now: () => Date.now(),
-		makeUuid: () => randomUUID(),
-		fetch: globalThis.fetch as typeof fetch,
-		deliveryTimeoutMs: () => DELIVERY_TIMEOUT_MS_DEFAULT,
-	}),
+			now: () => Date.now(),
+			makeUuid: () => randomUUID(),
+			fetch: globalThis.fetch as typeof fetch,
+			deliveryTimeoutMs: () => DELIVERY_TIMEOUT_MS_DEFAULT,
+		} satisfies AlertRuntimeShape),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 }
 
 const toIso = (value: number | null | undefined): IsoDateTimeValue | null =>
@@ -947,7 +946,7 @@ export interface AlertsServiceShape {
 	>
 }
 
-export class AlertsService extends Context.Service<AlertsService, AlertsServiceShape>()("AlertsService", {
+export class AlertsService extends Context.Service<AlertsService, AlertsServiceShape>()("@maple/api/services/AlertsService", {
 	make: Effect.gen(function* () {
 		const database = yield* Database
 		const env = yield* Env
@@ -1637,11 +1636,15 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 				})
 		}
 
-		const computeRetryDelayMs = (attemptNumber: number) => {
+		// Exponential backoff up to 15 min, plus 0–999 ms jitter sourced from
+		// Effect's `Random` service so tests can fix the seed deterministically.
+		const computeRetryDelayMs = Effect.fn("AlertsService.computeRetryDelayMs")(function* (
+			attemptNumber: number,
+		) {
 			const base = Math.min(60_000 * Math.pow(2, attemptNumber - 1), 15 * 60_000)
-			const jitter = Math.floor(Math.random() * 1_000)
+			const jitter = yield* Random.nextIntBetween(0, 1_000)
 			return base + jitter
-		}
+		})
 
 		const listDestinations = Effect.fn("AlertsService.listDestinations")(function* (orgId: OrgId) {
 			const rows = yield* dbExecute((db) =>
@@ -2795,7 +2798,7 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 									decodeAlertDestinationIdSync(row.destinationId),
 									decodeAlertEventTypeSync(row.eventType),
 									retryPayload,
-									currentTime + computeRetryDelayMs(row.attemptNumber),
+									currentTime + (yield* computeRetryDelayMs(row.attemptNumber)),
 									row.deliveryKey,
 									row.attemptNumber + 1,
 								)
@@ -3594,6 +3597,4 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 }

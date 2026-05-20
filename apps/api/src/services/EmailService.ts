@@ -15,7 +15,7 @@ export interface EmailServiceShape {
 
 const EMAIL_TIMEOUT = Duration.seconds(15)
 
-export class EmailService extends Context.Service<EmailService, EmailServiceShape>()("EmailService", {
+export class EmailService extends Context.Service<EmailService, EmailServiceShape>()("@maple/api/services/EmailService", {
 	make: Effect.gen(function* () {
 		const env = yield* Env
 		const apiKey = env.RESEND_API_KEY
@@ -90,8 +90,8 @@ export class EmailService extends Context.Service<EmailService, EmailServiceShap
 			yield* Effect.logInfo("Email sent successfully").pipe(Effect.annotateLogs({ to, subject }))
 		})
 
-		return { isConfigured, send }
+		return { isConfigured, send } satisfies EmailServiceShape
 	}),
 }) {
-	static readonly Default = Layer.effect(this, this.make)
+	static readonly layer = Layer.effect(this, this.make)
 }

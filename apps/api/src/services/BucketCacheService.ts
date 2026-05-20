@@ -1,6 +1,6 @@
 import type { OrgId } from "@maple/domain"
 import type { TimeseriesPoint } from "@maple/query-engine"
-import { Array as Arr, Config, Context, Deferred, Effect, Layer, Option } from "effect"
+import { Array as Arr, Clock, Config, Context, Deferred, Effect, Layer, Option } from "effect"
 import { EdgeCacheService } from "./EdgeCacheService"
 
 /**
@@ -278,7 +278,7 @@ const ttlSecondsConfig = Config.number("QE_BUCKET_CACHE_TTL_SECONDS").pipe(Confi
 const fluxSecondsConfig = Config.number("QE_BUCKET_CACHE_FLUX_SECONDS").pipe(Config.withDefault(60))
 
 export class BucketCacheService extends Context.Service<BucketCacheService, BucketCacheServiceShape>()(
-	"BucketCacheService",
+	"@maple/api/services/BucketCacheService",
 	{
 		make: Effect.gen(function* () {
 			const edgeCache = yield* EdgeCacheService
@@ -304,7 +304,7 @@ export class BucketCacheService extends Context.Service<BucketCacheService, Buck
 			): Effect.Effect<BucketCacheOutcome, E, R> =>
 				Effect.gen(function* () {
 					const bucketMs = request.bucketSeconds * 1000
-					const fluxBoundaryMs = Date.now() - fluxSeconds * 1000
+					const fluxBoundaryMs = (yield* Clock.currentTimeMillis) - fluxSeconds * 1000
 
 					const fingerprint = yield* Effect.promise(() =>
 						generateFingerprint(request.orgId, request.query, request.bucketSeconds),
@@ -483,11 +483,9 @@ export class BucketCacheService extends Context.Service<BucketCacheService, Buck
 			return {
 				enabled,
 				getOrComputeBuckets,
-			}
+			} satisfies BucketCacheServiceShape
 		}),
 	},
 ) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 }

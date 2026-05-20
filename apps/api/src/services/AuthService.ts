@@ -10,7 +10,7 @@ import {
 	UnauthorizedError,
 	UserId,
 } from "@maple/domain/http"
-import { Effect, Layer, Option, Redacted, Schema, Context } from "effect"
+import { Clock, Effect, Layer, Option, Redacted, Schema, Context } from "effect"
 import { Env } from "./Env"
 
 export interface TenantContext {
@@ -149,7 +149,8 @@ const verifyHs256Jwt = Effect.fn("AuthService.verifyHs256Jwt")(function* (
 	const payload = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(JwtPayloadSchema))(
 		decodeBase64Url(encodedPayload),
 	).pipe(Effect.mapError(() => unauthorized("Invalid JWT payload")))
-	const now = Math.floor(Date.now() / 1000)
+	// JWT exp/nbf are in seconds since epoch (RFC 7519); divide Clock millis.
+	const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
 
 	if (payload.nbf && now < payload.nbf) {
 		return yield* unauthorized("JWT is not active yet")
@@ -298,7 +299,7 @@ export const makeLoginSelfHosted = (
 		}
 
 		const tenant = makeSelfHostedTenant(env.MAPLE_DEFAULT_ORG_ID)
-		const now = Math.floor(Date.now() / 1000)
+		const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
 		const token = signHs256Jwt(
 			{
 				sub: tenant.userId,
@@ -459,7 +460,7 @@ export const makeGetUserEmail = (
 	})
 }
 
-export class AuthService extends Context.Service<AuthService, AuthServiceShape>()("AuthService", {
+export class AuthService extends Context.Service<AuthService, AuthServiceShape>()("@maple/api/services/AuthService", {
 	make: Effect.gen(function* () {
 		const env = yield* Env
 		const resolveTenant = makeResolveTenant(env)
@@ -472,10 +473,8 @@ export class AuthService extends Context.Service<AuthService, AuthServiceShape>(
 			resolveMcpTenant,
 			loginSelfHosted,
 			getUserEmail,
-		}
+		} satisfies AuthServiceShape
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = this.layer
-	static readonly Default = this.layer
 }

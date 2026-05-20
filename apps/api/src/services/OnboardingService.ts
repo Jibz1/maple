@@ -3,7 +3,7 @@ import type { OrgOnboardingStateRow } from "@maple/db"
 import { OnboardingPersistenceError, OnboardingStateResponse } from "@maple/domain/http"
 import type { OrgId } from "@maple/domain/http"
 import { and, eq, isNull } from "drizzle-orm"
-import { Context, Effect, Layer } from "effect"
+import { Clock, Context, Effect, Layer } from "effect"
 import { Database } from "./DatabaseLive"
 
 const toPersistenceError = (error: unknown) =>
@@ -39,7 +39,7 @@ function rowToResponse(row: OrgOnboardingStateRow): OnboardingStateResponse {
 	})
 }
 
-export class OnboardingService extends Context.Service<OnboardingService>()("OnboardingService", {
+export class OnboardingService extends Context.Service<OnboardingService>()("@maple/api/services/OnboardingService", {
 	make: Effect.gen(function* () {
 		const database = yield* Database
 
@@ -66,7 +66,7 @@ export class OnboardingService extends Context.Service<OnboardingService>()("Onb
 			const existing = yield* findRow(orgId)
 			if (existing) return existing
 
-			const now = Date.now()
+			const now = yield* Clock.currentTimeMillis
 			yield* database
 				.execute((db) =>
 					db
@@ -111,7 +111,7 @@ export class OnboardingService extends Context.Service<OnboardingService>()("Onb
 			yield* Effect.annotateCurrentSpan("orgId", orgId)
 			yield* ensureRow(orgId, userId, email)
 
-			const now = Date.now()
+			const now = yield* Clock.currentTimeMillis
 			yield* database
 				.execute((db) =>
 					db
@@ -143,7 +143,7 @@ export class OnboardingService extends Context.Service<OnboardingService>()("Onb
 		/** Stamp first-data time only if not already set. Returns true when newly stamped. */
 		const recordFirstDataReceived = Effect.fn("OnboardingService.recordFirstDataReceived")(
 			function* (orgId: OrgId) {
-				const now = Date.now()
+				const now = yield* Clock.currentTimeMillis
 				const result = yield* database
 					.execute((db) =>
 						db
@@ -165,7 +165,7 @@ export class OnboardingService extends Context.Service<OnboardingService>()("Onb
 			orgId: OrgId,
 			field: OnboardingEmailField,
 		) {
-			const now = Date.now()
+			const now = yield* Clock.currentTimeMillis
 			const set: Partial<typeof orgOnboardingState.$inferInsert> = { updatedAt: now }
 			if (field === "welcomeEmailSentAt") set.welcomeEmailSentAt = now
 			else if (field === "connectNudgeEmailSentAt") set.connectNudgeEmailSentAt = now
@@ -193,7 +193,7 @@ export class OnboardingService extends Context.Service<OnboardingService>()("Onb
 		 */
 		const suppressOnboardingEmails = Effect.fn("OnboardingService.suppressOnboardingEmails")(
 			function* (orgId: OrgId) {
-				const now = Date.now()
+				const now = yield* Clock.currentTimeMillis
 				yield* database
 					.execute((db) =>
 						db
@@ -225,10 +225,8 @@ export class OnboardingService extends Context.Service<OnboardingService>()("Onb
 			markEmailSent,
 			suppressOnboardingEmails,
 			listAll,
-		} as const
+		}
 	}),
 }) {
-	static readonly Default = Layer.effect(this, this.make)
 	static readonly layer = Layer.effect(this, this.make)
-	static readonly Live = Layer.effect(this, this.make)
 }
