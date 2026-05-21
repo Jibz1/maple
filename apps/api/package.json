@@ -27,6 +27,7 @@
 		"@clickhouse/client-web": "catalog:clickhouse",
 		"@clerk/backend": "^2.30.1",
 		"@effect/opentelemetry": "catalog:effect",
+		"@effect/platform-bun": "catalog:effect",
 		"@libsql/client": "0.15.15",
 		"@maple-dev/effect-sdk": "workspace:*",
 		"@maple/db": "workspace:*",
