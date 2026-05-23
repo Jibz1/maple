@@ -1,6 +1,8 @@
+import { useMemo } from "react"
 import { toast } from "sonner"
 import { CopyIcon } from "@/components/icons"
 import { useClipboard } from "@maple/ui/hooks/use-clipboard"
+import { highlightCode } from "@/lib/sugar-high"
 import type { Log } from "@/api/tinybird/logs"
 
 /** Serialize a log into the pretty-printed JSON shown in the Raw panel. */
@@ -30,6 +32,7 @@ interface LogRawPanelProps {
 export function LogRawPanel({ log }: LogRawPanelProps) {
 	const clipboard = useClipboard()
 	const jsonPayload = buildLogJsonPayload(log)
+	const highlighted = useMemo(() => highlightCode(jsonPayload), [jsonPayload])
 
 	return (
 		<div>
@@ -47,8 +50,8 @@ export function LogRawPanel({ log }: LogRawPanelProps) {
 					Copy
 				</button>
 			</div>
-			<pre className="rounded-md border bg-muted/30 p-2 font-mono text-[11px] whitespace-pre-wrap break-all">
-				{jsonPayload}
+			<pre className="rounded-md border bg-muted/30 p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+				<code dangerouslySetInnerHTML={{ __html: highlighted }} />
 			</pre>
 		</div>
 	)
