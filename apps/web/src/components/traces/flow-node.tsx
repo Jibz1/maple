@@ -158,7 +158,7 @@ export const FlowSpanNode = memo(function FlowSpanNode({ data }: FlowSpanNodePro
 	const kindLabel = SPAN_KIND_LABELS[span.spanKind] || span.spanKind.replace("SPAN_KIND_", "")
 
 	// Detect HTTP span info
-	const httpInfo = getHttpInfo(span.spanName, span.spanAttributes)
+	const httpInfo = getHttpInfo(span)
 	const isHttpRequest = !!httpInfo
 
 	// Detect cache span

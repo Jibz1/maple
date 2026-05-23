@@ -182,7 +182,11 @@ function transformSpanListRow(row: Record<string, unknown>): Trace {
 			kind: String(row.spanKind),
 			statusCode: String(row.statusCode),
 			attributes: rootSpanAttributes,
-			http: getHttpInfo(String(row.spanName), rootSpanAttributes),
+			http: getHttpInfo({
+				spanName: String(row.spanName),
+				spanAttributes: rootSpanAttributes,
+				spanKind: String(row.spanKind),
+			}),
 		},
 		rootSpanName: String(row.spanName),
 		hasError: row.hasError === true || row.hasError === 1,

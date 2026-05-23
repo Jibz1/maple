@@ -10,7 +10,7 @@ interface HttpSpanLabelProps {
 }
 
 export function HttpSpanLabel({ spanName, spanAttributes, spanKind, className, textClassName }: HttpSpanLabelProps) {
-	const httpInfo = getHttpInfo(spanName, spanAttributes ?? {})
+	const httpInfo = getHttpInfo({ spanName, spanAttributes, spanKind })
 
 	if (!httpInfo) {
 		return (
@@ -20,7 +20,7 @@ export function HttpSpanLabel({ spanName, spanAttributes, spanKind, className, t
 		)
 	}
 
-	const isClient = spanKind === "SPAN_KIND_CLIENT" || httpInfo.kind === "client"
+	const isClient = httpInfo.kind === "client"
 
 	return (
 		<span

@@ -1,3 +1,7 @@
+import { getHttpInfo, type HttpInfo } from "./http"
+
+export { getHttpInfo, type HttpInfo } from "./http"
+
 const API_BASE_URL =
 	process.env.EXPO_PUBLIC_API_BASE_URL ?? (__DEV__ ? "http://127.0.0.1:3472" : "https://api.maple.dev")
 
@@ -566,13 +570,6 @@ export async function fetchSpanHierarchy(traceId: string): Promise<SpanHierarchy
 
 // ── Traces ──
 
-export interface HttpInfo {
-	method: string
-	route: string | null
-	statusCode: number | null
-	isError: boolean
-}
-
 export interface Trace {
 	traceId: string
 	startTime: string
@@ -583,40 +580,6 @@ export interface Trace {
 	hasError: boolean
 	http: HttpInfo | null
 	statusCode: string
-}
-
-export function getHttpInfo(spanName: string, attrs: Record<string, string>): HttpInfo | null {
-	const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const
-	let method = attrs["http.method"] || attrs["http.request.method"]
-	let route: string | null = attrs["http.route"] || attrs["http.target"] || attrs["url.path"] || null
-
-	if (!method) {
-		const parts = spanName.split(" ")
-		if (spanName.startsWith("http.server ") && parts.length >= 2) {
-			method = parts[1]
-			if (!route && parts.length >= 3) route = parts.slice(2).join(" ")
-		} else if (
-			parts.length >= 2 &&
-			HTTP_METHODS.includes(parts[0].toUpperCase() as (typeof HTTP_METHODS)[number])
-		) {
-			method = parts[0].toUpperCase()
-			if (!route) route = parts.slice(1).join(" ")
-		} else if (HTTP_METHODS.includes(spanName.toUpperCase() as (typeof HTTP_METHODS)[number])) {
-			method = spanName.toUpperCase()
-		}
-	}
-
-	if (!method) return null
-
-	const rawStatus = attrs["http.status_code"] || attrs["http.response.status_code"]
-	const statusCode = rawStatus ? parseInt(rawStatus, 10) || null : null
-
-	return {
-		method: method.toUpperCase(),
-		route,
-		statusCode,
-		isError: statusCode != null && statusCode >= 500,
-	}
 }
 
 function transformTraceRow(row: Record<string, unknown>): Trace {
@@ -630,6 +593,10 @@ function transformTraceRow(row: Record<string, unknown>): Trace {
 		"url.path",
 		"http.response.status_code",
 		"http.target",
+		"url.full",
+		"http.url",
+		"server.address",
+		"net.peer.name",
 	]) {
 		if (spanAttrs[key]) httpAttrs[key] = spanAttrs[key]
 	}
@@ -642,7 +609,11 @@ function transformTraceRow(row: Record<string, unknown>): Trace {
 		services: [String(row.serviceName)],
 		rootSpanName: String(row.spanName),
 		hasError: row.hasError === true || row.hasError === 1,
-		http: getHttpInfo(String(row.spanName), httpAttrs),
+		http: getHttpInfo({
+			spanName: String(row.spanName),
+			spanAttributes: httpAttrs,
+			spanKind: row.spanKind != null ? String(row.spanKind) : undefined,
+		}),
 		statusCode: String(row.statusCode),
 	}
 }

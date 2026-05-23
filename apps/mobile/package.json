@@ -9,7 +9,8 @@
 		"ios": "expo run:ios",
 		"web": "expo start --web",
 		"gen:types": "node scripts/generate-uniwind-types.mjs",
-		"typecheck": "bun run gen:types && tsc --noEmit"
+		"typecheck": "bun run gen:types && tsc --noEmit",
+		"test": "vitest run --passWithNoTests"
 	},
 	"dependencies": {
 		"@clerk/expo": "^3.1.8",

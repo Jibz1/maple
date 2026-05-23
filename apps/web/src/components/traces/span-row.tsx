@@ -114,7 +114,7 @@ export function SpanRow({
 	const widthPercent = totalDurationMs > 0 ? (span.durationMs / totalDurationMs) * 100 : 0
 
 	const cacheInfo = getCacheInfo(span.spanAttributes)
-	const httpInfo = getHttpInfo(span.spanName, span.spanAttributes)
+	const httpInfo = getHttpInfo(span)
 	const statusStyle = statusStyles[span.statusCode] ?? statusStyles.Unset
 	const kindLabel = kindLabels[span.spanKind] ?? span.spanKind?.replace("SPAN_KIND_", "") ?? "Unknown"
 
