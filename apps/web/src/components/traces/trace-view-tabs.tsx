@@ -15,7 +15,6 @@ interface TraceViewTabsProps {
 	totalDurationMs: number
 	traceStartTime: string
 	services: string[]
-	defaultExpandDepth?: number
 	selectedSpanId?: string
 	onSelectSpan?: (span: SpanNode) => void
 }
@@ -26,7 +25,6 @@ export function TraceViewTabs({
 	totalDurationMs,
 	traceStartTime,
 	services,
-	defaultExpandDepth = Infinity,
 	selectedSpanId,
 	onSelectSpan,
 }: TraceViewTabsProps) {
@@ -61,7 +59,7 @@ export function TraceViewTabs({
 				</TabsList>
 
 				<TabsContent value="waterfall" className="flex-1 min-h-0 overflow-auto">
-					<SpanHierarchy defaultExpandDepth={defaultExpandDepth} />
+					<SpanHierarchy />
 				</TabsContent>
 
 				<TabsContent value="timeline" className="flex-1 min-h-0">

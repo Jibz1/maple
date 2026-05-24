@@ -4,6 +4,7 @@ import type { TimelineBar, ViewportState, TimelineState, TimelineAction } from "
 import { ROW_HEIGHT, ROW_GAP, OVERSCAN } from "./trace-timeline-types"
 import { getValueHue } from "@maple/ui/colors"
 import { resolveColorValue, isStatusCodePreset, type ColorByField } from "./color-by"
+import { computeDefaultExpandedSpanIds, countDescendants } from "./auto-collapse"
 
 // --- Color palette (kept muted to preserve current aesthetic) ---
 
@@ -24,26 +25,6 @@ function barBorderFromHue(hue: number | null, isError: boolean, statusPreset: bo
 }
 
 // --- Layout ---
-
-function collectDefaultExpanded(nodes: SpanNode[], depth: number, maxDepth: number): Set<string> {
-	const ids = new Set<string>()
-	for (const node of nodes) {
-		if (node.children.length > 0 && depth < maxDepth) {
-			ids.add(node.spanId)
-			const childIds = collectDefaultExpanded(node.children, depth + 1, maxDepth)
-			childIds.forEach((id) => ids.add(id))
-		}
-	}
-	return ids
-}
-
-function countDescendants(node: SpanNode): number {
-	let count = 0
-	for (const child of node.children) {
-		count += 1 + countDescendants(child)
-	}
-	return count
-}
 
 export interface LayoutResult {
 	bars: TimelineBar[]
@@ -305,7 +286,8 @@ export interface UseTraceTimelineOptions {
 	traceStartTime: string
 	services: string[]
 	colorBy: ColorByField
-	defaultExpandDepth?: number
+	/** Keep this span's ancestor chain expanded so auto-collapse never hides it. */
+	keepVisibleSpanId?: string
 }
 
 export interface UseTraceTimelineResult {
@@ -329,15 +311,15 @@ export function useTraceTimeline({
 	traceStartTime,
 	services,
 	colorBy,
-	defaultExpandDepth = Infinity,
+	keepVisibleSpanId,
 }: UseTraceTimelineOptions): UseTraceTimelineResult {
 	const traceStartMs = React.useMemo(() => new Date(traceStartTime).getTime(), [traceStartTime])
 	const traceEndMs = traceStartMs + totalDurationMs
 
-	// Initialize with default expanded spans (those with children, up to depth)
+	// Initialize with default expanded spans (auto-collapses big subtrees on long traces).
 	const defaultExpanded = React.useMemo(
-		() => collectDefaultExpanded(rootSpans, 0, defaultExpandDepth),
-		[rootSpans, defaultExpandDepth],
+		() => computeDefaultExpandedSpanIds(rootSpans, { keepVisibleSpanId }),
+		[rootSpans, keepVisibleSpanId],
 	)
 
 	const [state, dispatch] = React.useReducer(timelineReducer, {

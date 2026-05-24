@@ -8,6 +8,7 @@ import { getServiceLegendColor } from "@maple/ui/lib/colors"
 import { getCacheInfo, cacheResultStyles } from "@/lib/cache"
 import { getHttpInfo, HTTP_METHOD_COLORS } from "@maple/ui/lib/http"
 import { PixelDurationBar } from "./pixel-duration-bar"
+import { countDescendants } from "./auto-collapse"
 import type { SpanNode } from "@/api/tinybird/traces"
 
 interface SpanRowProps {
@@ -19,7 +20,6 @@ interface SpanRowProps {
 	onToggle: () => void
 	isSelected?: boolean
 	onSelect?: (span: SpanNode) => void
-	defaultExpandDepth?: number
 }
 
 const statusStyles: Record<string, string> = {
@@ -192,6 +192,12 @@ export function SpanRow({
 				) : (
 					<span className="flex-1 truncate font-mono text-xs" title={span.spanName}>
 						{span.spanName}
+					</span>
+				)}
+
+				{hasChildren && !expanded && (
+					<span className="shrink-0 text-[10px] text-muted-foreground">
+						+{countDescendants(span)}
 					</span>
 				)}
 			</div>

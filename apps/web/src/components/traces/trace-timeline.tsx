@@ -7,6 +7,7 @@ import { getServiceLegendColor } from "@maple/ui/colors"
 import { useContainerSize } from "@maple/ui/hooks/use-container-size"
 import { useTraceView } from "./trace-view-context"
 import { useTraceTimeline } from "./use-trace-timeline"
+import { collectAllCollapsibleIds } from "./auto-collapse"
 import { useTimelineGestures } from "./use-timeline-gestures"
 import { TraceTimelineSearch } from "./trace-timeline-search"
 import { TraceTimelineMinimap } from "./trace-timeline-minimap"
@@ -79,7 +80,7 @@ export function TraceTimeline() {
 		traceStartTime,
 		services,
 		colorBy,
-		defaultExpandDepth: Infinity,
+		keepVisibleSpanId: selectedSpanId,
 	})
 
 	const { barRectsRef, findBarAt } = useCanvasHitTest()
@@ -205,6 +206,14 @@ export function TraceTimeline() {
 	const handleZoomToFit = React.useCallback(() => {
 		dispatch({ type: "ZOOM_TO_FIT", traceStartMs, traceEndMs })
 	}, [dispatch, traceStartMs, traceEndMs])
+
+	const handleExpandAll = React.useCallback(() => {
+		dispatch({ type: "EXPAND_ALL", spanIds: [...collectAllCollapsibleIds(rootSpans)] })
+	}, [dispatch, rootSpans])
+
+	const handleCollapseAll = React.useCallback(() => {
+		dispatch({ type: "COLLAPSE_ALL" })
+	}, [dispatch])
 
 	const handleSidebarResize = React.useCallback((delta: number) => {
 		setSidebarWidth((w) =>
@@ -345,6 +354,22 @@ export function TraceTimeline() {
 					<span className="tabular-nums">{bars.length} spans</span>
 				</div>
 				<div className="flex items-center gap-1">
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={handleExpandAll}
+						className="h-5 text-[10px] px-2"
+					>
+						Expand all
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={handleCollapseAll}
+						className="h-5 text-[10px] px-2"
+					>
+						Collapse all
+					</Button>
 					<ColorByPicker value={colorBy} onChange={setColorBy} rootSpans={rootSpans} />
 					{isZoomed && (
 						<Button

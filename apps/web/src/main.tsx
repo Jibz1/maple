@@ -34,7 +34,10 @@ if (replayIngestKey) {
 		endpoint: ingestUrl,
 		environment: import.meta.env.MODE,
 		tracing: { enabled: true, instrumentFetch: false },
-		replay: { enabled: true, sampleRate: import.meta.env.DEV ? 1 : 0.1 },
+		// Temporarily recording 100% in prod to verify the replay pipeline
+		// end-to-end (only ~3 sessions/day, so 10% sampling captured nothing).
+		// Dial back to a fractional prod rate once a replay is confirmed landing.
+		replay: { enabled: true, sampleRate: 1 },
 	})
 }
 
