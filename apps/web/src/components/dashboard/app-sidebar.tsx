@@ -4,7 +4,7 @@ import {
 	HouseIcon,
 	FileIcon,
 	PulseIcon,
-	EyeIcon,
+	PlayRotateClockwiseIcon,
 	ChartLineIcon,
 	ServerIcon,
 	ComputerIcon,
@@ -108,7 +108,7 @@ const signalsNavItems: SignalsNavItem[] = [
 	{
 		title: "Replays",
 		href: "/replays",
-		icon: EyeIcon,
+		icon: PlayRotateClockwiseIcon,
 	},
 	{
 		title: "Infrastructure",
