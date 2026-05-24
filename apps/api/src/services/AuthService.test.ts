@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { Effect, Exit, Option, Redacted, Schema } from "effect"
 import { OrgId, RoleName, UserId } from "@maple/domain/http"
-import { makeLoginSelfHosted, makeResolveMcpTenant, makeResolveTenant } from "./AuthService"
+import { makeGetCustomerData, makeLoginSelfHosted, makeResolveMcpTenant, makeResolveTenant } from "./AuthService"
 
 const asOrgId = Schema.decodeUnknownSync(OrgId)
 const asUserId = Schema.decodeUnknownSync(UserId)
@@ -322,6 +322,23 @@ describe("makeResolveMcpTenant", () => {
 			roles: [asRoleName("root")],
 			authMode: "self_hosted",
 		})
+	})
+})
+
+describe("makeGetCustomerData", () => {
+	it("returns null identity outside Clerk mode (no enrichment, no regression)", async () => {
+		const getCustomerData = makeGetCustomerData(baseEnv)
+
+		const result = await Effect.runPromise(
+			getCustomerData({
+				orgId: asOrgId("default"),
+				userId: asUserId("root"),
+				roles: [asRoleName("root")],
+				authMode: "self_hosted",
+			}),
+		)
+
+		expect(result).toEqual({ email: null, orgName: null })
 	})
 })
 

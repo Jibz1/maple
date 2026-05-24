@@ -27,6 +27,9 @@ export interface AuthServiceShape {
 		password: string,
 	) => Effect.Effect<SelfHostedLoginResponse, SelfHostedAuthDisabledError | SelfHostedInvalidPasswordError>
 	readonly getUserEmail: (userId: string) => Effect.Effect<string | null>
+	readonly getCustomerData: (
+		tenant: TenantContext,
+	) => Effect.Effect<{ email: string | null; orgName: string | null }>
 }
 
 type HeaderRecord = Record<string, string | undefined>
@@ -428,20 +431,35 @@ export const makeResolveMcpTenant = (
 	authenticateClerkRequest = makeClerkAuthenticateRequest(env),
 ) => makeResolveTenant(env, authenticateClerkRequest, "api_key")
 
-export const makeGetUserEmail = (
+type ClerkUser = Awaited<ReturnType<ReturnType<typeof createClerkClient>["users"]["getUser"]>>
+
+const extractPrimaryEmail = (u: ClerkUser): string | null => {
+	const primary = u.emailAddresses?.find((e) => e.id === u.primaryEmailAddressId)
+	return primary?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? null
+}
+
+const makeClerkClient = (
 	env: Pick<AuthEnv, "MAPLE_AUTH_MODE" | "CLERK_SECRET_KEY" | "CLERK_PUBLISHABLE_KEY" | "CLERK_JWT_KEY">,
 ) => {
 	if (getAuthMode(env.MAPLE_AUTH_MODE) !== "clerk" || Option.isNone(env.CLERK_SECRET_KEY)) {
-		return Effect.fn("AuthService.getUserEmail")(function* (_userId: string) {
-			return null as string | null
-		})
+		return null
 	}
-
-	const clerkClient = createClerkClient({
+	return createClerkClient({
 		secretKey: Redacted.value(env.CLERK_SECRET_KEY.value),
 		publishableKey: getOptionalString(env.CLERK_PUBLISHABLE_KEY),
 		jwtKey: getOptionalSecret(env.CLERK_JWT_KEY),
 	})
+}
+
+export const makeGetUserEmail = (
+	env: Pick<AuthEnv, "MAPLE_AUTH_MODE" | "CLERK_SECRET_KEY" | "CLERK_PUBLISHABLE_KEY" | "CLERK_JWT_KEY">,
+) => {
+	const clerkClient = makeClerkClient(env)
+	if (!clerkClient) {
+		return Effect.fn("AuthService.getUserEmail")(function* (_userId: string) {
+			return null as string | null
+		})
+	}
 
 	return Effect.fn("AuthService.getUserEmail")(function* (userId: string) {
 		const user = yield* Effect.tryPromise({
@@ -451,12 +469,43 @@ export const makeGetUserEmail = (
 
 		return Option.match(user, {
 			onNone: () => null as string | null,
-			onSome: (u) => {
-				const primaryId = u.primaryEmailAddressId
-				const primary = u.emailAddresses?.find((e) => e.id === primaryId)
-				return primary?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? null
-			},
+			onSome: extractPrimaryEmail,
 		})
+	})
+}
+
+export const makeGetCustomerData = (
+	env: Pick<AuthEnv, "MAPLE_AUTH_MODE" | "CLERK_SECRET_KEY" | "CLERK_PUBLISHABLE_KEY" | "CLERK_JWT_KEY">,
+) => {
+	const clerkClient = makeClerkClient(env)
+	if (!clerkClient) {
+		return Effect.fn("AuthService.getCustomerData")(function* (_tenant: TenantContext) {
+			return { email: null as string | null, orgName: null as string | null }
+		})
+	}
+
+	return Effect.fn("AuthService.getCustomerData")(function* (tenant: TenantContext) {
+		const [user, org] = yield* Effect.all(
+			[
+				Effect.tryPromise({
+					try: () => clerkClient.users.getUser(tenant.userId),
+					catch: (error) => error,
+				}).pipe(Effect.option),
+				Effect.tryPromise({
+					try: () => clerkClient.organizations.getOrganization({ organizationId: tenant.orgId }),
+					catch: (error) => error,
+				}).pipe(Effect.option),
+			],
+			{ concurrency: "unbounded" },
+		)
+
+		return {
+			email: Option.match(user, { onNone: () => null as string | null, onSome: extractPrimaryEmail }),
+			orgName: Option.match(org, {
+				onNone: () => null as string | null,
+				onSome: (o) => o.name ?? null,
+			}),
+		}
 	})
 }
 
@@ -467,12 +516,14 @@ export class AuthService extends Context.Service<AuthService, AuthServiceShape>(
 		const resolveMcpTenant = makeResolveMcpTenant(env)
 		const loginSelfHosted = makeLoginSelfHosted(env)
 		const getUserEmail = makeGetUserEmail(env)
+		const getCustomerData = makeGetCustomerData(env)
 
 		return {
 			resolveTenant,
 			resolveMcpTenant,
 			loginSelfHosted,
 			getUserEmail,
+			getCustomerData,
 		} satisfies AuthServiceShape
 	}),
 }) {
