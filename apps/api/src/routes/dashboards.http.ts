@@ -5,6 +5,7 @@ import {
 	DashboardTemplateNotFoundError,
 	DashboardTemplatesListResponse,
 	DashboardValidationError,
+	DashboardPersesImportResponse,
 	MapleApi,
 	PortableDashboardDocument,
 } from "@maple/domain/http"
@@ -12,6 +13,7 @@ import { Effect } from "effect"
 import { DashboardPersistenceService } from "../services/DashboardPersistenceService"
 import { getTemplateById, listTemplateMetadata } from "../dashboard-templates"
 import type { TemplateParameterValues } from "../dashboard-templates"
+import { convertPersesDashboardToPortable } from "../services/perses-dashboard-import"
 
 export const HttpDashboardsLive = HttpApiBuilder.group(MapleApi, "dashboards", (handlers) =>
 	Effect.gen(function* () {
@@ -28,6 +30,22 @@ export const HttpDashboardsLive = HttpApiBuilder.group(MapleApi, "dashboards", (
 				Effect.gen(function* () {
 					const tenant = yield* CurrentTenant.Context
 					return yield* persistence.list(tenant.orgId)
+				}),
+			)
+			.handle("importPerses", ({ payload }) =>
+				Effect.gen(function* () {
+					const converted = yield* convertPersesDashboardToPortable(payload.dashboard)
+					const tenant = yield* CurrentTenant.Context
+					const dashboard = yield* persistence.create(
+						tenant.orgId,
+						tenant.userId,
+						converted.dashboard,
+					)
+
+					return new DashboardPersesImportResponse({
+						dashboard,
+						warnings: [...converted.warnings],
+					})
 				}),
 			)
 			.handle("upsert", ({ params, payload }) =>

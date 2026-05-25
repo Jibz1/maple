@@ -241,6 +241,19 @@ export class DashboardCreateRequest extends Schema.Class<DashboardCreateRequest>
 	dashboard: PortableDashboardDocument,
 }) {}
 
+export class DashboardPersesImportRequest extends Schema.Class<DashboardPersesImportRequest>(
+	"DashboardPersesImportRequest",
+)({
+	dashboard: Schema.Record(Schema.String, Schema.Unknown),
+}) {}
+
+export class DashboardPersesImportResponse extends Schema.Class<DashboardPersesImportResponse>(
+	"DashboardPersesImportResponse",
+)({
+	dashboard: DashboardDocument,
+	warnings: Schema.Array(Schema.String),
+}) {}
+
 export class DashboardDeleteResponse extends Schema.Class<DashboardDeleteResponse>("DashboardDeleteResponse")(
 	{
 		id: DashboardId,
@@ -412,6 +425,13 @@ export class DashboardsApiGroup extends HttpApiGroup.make("dashboards")
 		HttpApiEndpoint.post("create", "/", {
 			payload: DashboardCreateRequest,
 			success: DashboardDocument,
+			error: [DashboardValidationError, DashboardPersistenceError, DashboardConcurrencyError],
+		}),
+	)
+	.add(
+		HttpApiEndpoint.post("importPerses", "/import/perses", {
+			payload: DashboardPersesImportRequest,
+			success: DashboardPersesImportResponse,
 			error: [DashboardValidationError, DashboardPersistenceError, DashboardConcurrencyError],
 		}),
 	)

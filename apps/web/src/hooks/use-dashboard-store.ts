@@ -1,11 +1,19 @@
-import { Result, useAtom, useAtomRefresh, useAtomSet, useAtomValue } from "@/lib/effect-atom"
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import {
+	Result,
+	useAtom,
+	useAtomRefresh,
+	useAtomSet,
+	useAtomSubscribe,
+	useAtomValue,
+} from "@/lib/effect-atom"
+import { useCallback, useMemo, useRef } from "react"
 import { Cause, Exit, Option, Schema } from "effect"
 import {
 	DashboardConcurrencyError,
 	DashboardCreateRequest,
 	DashboardDocument,
 	DashboardId,
+	DashboardPersesImportRequest,
 	DashboardUpsertRequest,
 	IsoDateTimeString,
 	PortableDashboardDocument,
@@ -30,6 +38,30 @@ function generateId() {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function isExitLike(value: unknown): value is Exit.Exit<unknown, unknown> {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"_tag" in value &&
+		((value as { _tag: unknown })._tag === "Success" || (value as { _tag: unknown })._tag === "Failure")
+	)
+}
+
+function messageFromError(error: unknown): string | null {
+	if (error instanceof Error && error.message.trim().length > 0) {
+		return error.message
+	}
+
+	if (typeof error === "object" && error !== null) {
+		const message = (error as { message?: unknown }).message
+		if (typeof message === "string" && message.trim().length > 0) {
+			return message
+		}
+	}
+
+	return null
+}
+
 function findNextPosition(widgets: DashboardWidget[], newWidth: number): { x: number; y: number } {
 	if (widgets.length === 0) {
 		return { x: 0, y: 0 }
@@ -48,8 +80,17 @@ function findNextPosition(widgets: DashboardWidget[], newWidth: number): { x: nu
 }
 
 function getErrorMessage(error: unknown): string {
-	if (error instanceof Error && error.message.trim().length > 0) {
-		return error.message
+	const directMessage = messageFromError(error)
+	if (directMessage) return directMessage
+
+	if (isExitLike(error) && Exit.isFailure(error)) {
+		const failure = Option.getOrUndefined(Cause.findErrorOption(error.cause))
+		const failureMessage = messageFromError(failure)
+		if (failureMessage) return failureMessage
+
+		const squashed = Cause.squash(error.cause)
+		const squashedMessage = messageFromError(squashed)
+		if (squashedMessage) return squashedMessage
 	}
 
 	return "Dashboard persistence is temporarily unavailable"
@@ -170,6 +211,9 @@ export function useDashboardStore() {
 	const createMutation = useAtomSet(MapleApiAtomClient.mutation("dashboards", "create"), {
 		mode: "promiseExit",
 	})
+	const importPersesMutation = useAtomSet(MapleApiAtomClient.mutation("dashboards", "importPerses"), {
+		mode: "promiseExit",
+	})
 	const upsertMutation = useAtomSet(MapleApiAtomClient.mutation("dashboards", "upsert"), {
 		mode: "promiseExit",
 	})
@@ -183,17 +227,21 @@ export function useDashboardStore() {
 	// (from a refetch), not on re-mount with the same stale result. Without this guard,
 	// navigating between routes re-applies the old listResult and overwrites optimistic updates.
 	const lastSyncedListResult = useRef(listResult)
-	useEffect(() => {
-		if (listResult === lastSyncedListResult.current) return
-		lastSyncedListResult.current = listResult
-		if (Result.isSuccess(listResult)) {
-			const parsed = parseDashboards(listResult.value.dashboards)
-			setDashboards((previous) => reconcileDashboards(previous, parsed))
-			setPersistenceError(null)
-		} else if (Result.isFailure(listResult)) {
-			setPersistenceError(getErrorMessage(listResult))
-		}
-	}, [listResult, setDashboards, setPersistenceError])
+	const syncListResult = useCallback(
+		(nextListResult: typeof listResult) => {
+			if (nextListResult === lastSyncedListResult.current) return
+			lastSyncedListResult.current = nextListResult
+			if (Result.isSuccess(nextListResult)) {
+				const parsed = parseDashboards(nextListResult.value.dashboards)
+				setDashboards((previous) => reconcileDashboards(previous, parsed))
+				setPersistenceError(null)
+			} else if (Result.isFailure(nextListResult)) {
+				setPersistenceError(getErrorMessage(nextListResult))
+			}
+		},
+		[setDashboards, setPersistenceError],
+	)
+	useAtomSubscribe(listQueryAtom, syncListResult)
 
 	const isLoading = dashboards.length === 0 && !Result.isSuccess(listResult)
 
@@ -313,6 +361,41 @@ export function useDashboardStore() {
 			return dashboard
 		},
 		[createMutation, readOnly, setDashboards, setPersistenceError],
+	)
+
+	const importPersesDashboard = useCallback(
+		async (
+			persesDashboard: Record<string, unknown>,
+		): Promise<{ dashboard: Dashboard; warnings: string[] }> => {
+			if (readOnly) {
+				throw new Error("Dashboards are read-only")
+			}
+
+			const result = await importPersesMutation({
+				payload: new DashboardPersesImportRequest({
+					dashboard: persesDashboard,
+				}),
+				reactivityKeys: ["dashboards"],
+			})
+
+			if (Exit.isFailure(result)) {
+				setPersistenceError(getErrorMessage(result))
+				throw new Error(getErrorMessage(result))
+			}
+
+			const dashboard = ensureDashboard(result.value.dashboard)
+			if (dashboard === null) {
+				throw new Error("Imported Perses dashboard payload is invalid")
+			}
+
+			setDashboards((previous) => [dashboard, ...previous.filter((item) => item.id !== dashboard.id)])
+
+			return {
+				dashboard,
+				warnings: [...result.value.warnings],
+			}
+		},
+		[importPersesMutation, readOnly, setDashboards, setPersistenceError],
 	)
 
 	const createDashboard = useCallback(
@@ -634,6 +717,7 @@ export function useDashboardStore() {
 		persistenceError,
 		createDashboard,
 		importDashboard,
+		importPersesDashboard,
 		updateDashboard,
 		deleteDashboard,
 		updateDashboardTimeRange,
