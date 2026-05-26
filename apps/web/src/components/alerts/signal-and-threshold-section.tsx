@@ -1,11 +1,12 @@
-import { useState, type Dispatch, type SetStateAction } from "react"
-import type {
-	AlertComparator,
-	AlertMetricAggregation,
-	AlertMetricType,
-	AlertSeverity,
-	AlertSignalType,
-} from "@maple/domain/http"
+import {
+	useDeferredValue,
+	useMemo,
+	useState,
+	type Dispatch,
+	type ReactNode,
+	type SetStateAction,
+} from "react"
+import type { AlertComparator, AlertSeverity, AlertSignalType } from "@maple/domain/http"
 
 import { Card } from "@maple/ui/components/ui/card"
 import { Input } from "@maple/ui/components/ui/input"
@@ -20,8 +21,8 @@ import {
 import { cn } from "@maple/ui/utils"
 
 import { AlertSegmentedSelect } from "@/components/alerts/alert-segmented-select"
-import { SqlCodeEditor } from "@/components/alerts/sql-code-editor"
-import { WhereClauseEditor } from "@/components/query-builder/where-clause-editor"
+import { QueryPanel } from "@/components/dashboard-builder/config/query-panel"
+import { RawSqlEditorPanel } from "@/components/dashboard-builder/config/raw-sql-editor-panel"
 import {
 	ChartLineIcon,
 	ChevronDownIcon,
@@ -29,36 +30,43 @@ import {
 	FireIcon,
 	PulseIcon,
 } from "@/components/icons"
+import type { AutocompleteValuesContextType } from "@/hooks/use-autocomplete-values"
 import {
 	comparatorLabels,
 	isRangeComparator,
-	metricAggregationLabels,
-	metricTypeLabels,
 	RAW_QUERY_REDUCER_LABELS,
 	type RuleFormState,
 } from "@/lib/alerts/form-utils"
-import { AGGREGATIONS_BY_SOURCE } from "@/lib/query-builder/model"
+import { Result, useAtomValue } from "@/lib/effect-atom"
+import {
+	resetAggregationForMetricType,
+	resetQueryForDataSource,
+	type QueryBuilderDataSource,
+	type QueryBuilderQueryDraft,
+} from "@/lib/query-builder/model"
+import { disabledResultAtom } from "@/lib/services/atoms/disabled-result-atom"
+import { listMetricsResultAtom } from "@/lib/services/atoms/warehouse-query-atoms"
 
 interface SignalAndThresholdSectionProps {
 	form: RuleFormState
 	onChange: Dispatch<SetStateAction<RuleFormState>>
+	autocompleteValues: AutocompleteValuesContextType
 }
 
 /* Eight signal types is too many for a single segmented bar — they wrap and
-   every option looks equally weighted even though four of them are "I want a
-   common metric" and the other four are "I'll define my own". We split the
+   every option looks equally weighted even though five of them are "I want a
+   common metric" and the other two are "I'll define my own". We split the
    choice into two tiers:
-     - Tier 1 (always visible): the *kind* of signal — built-in, custom metric,
-       query builder, or raw SQL.
+     - Tier 1 (always visible): the *kind* of signal — built-in, query builder,
+       or raw SQL.
      - Tier 2 (only when "built-in" is active): which of the five canned
        metrics to watch.
    The mapping back to `AlertSignalType` happens in `signalTypeToKind` and the
    default-on-kind-switch logic in `setKind`. */
-type SignalKind = "builtin" | "metric" | "builder_query" | "raw_query"
+type SignalKind = "builtin" | "builder_query" | "raw_query"
 
 function signalTypeToKind(signalType: AlertSignalType): SignalKind {
-	if (signalType === "metric") return "metric"
-	if (signalType === "builder_query") return "builder_query"
+	if (signalType === "builder_query" || signalType === "metric") return "builder_query"
 	if (signalType === "raw_query") return "raw_query"
 	return "builtin"
 }
@@ -72,7 +80,6 @@ const NUMERIC_INPUT_CLASS =
 
 const SIGNAL_KIND_OPTIONS: ReadonlyArray<{ value: SignalKind; label: string }> = [
 	{ value: "builtin", label: "Built-in" },
-	{ value: "metric", label: "Metric" },
 	{ value: "builder_query", label: "Query" },
 	{ value: "raw_query", label: "Raw SQL" },
 ]
@@ -85,7 +92,7 @@ const SIGNAL_KIND_OPTIONS: ReadonlyArray<{ value: SignalKind; label: string }> =
 const BUILTIN_SIGNAL_OPTIONS: ReadonlyArray<{
 	value: AlertSignalType
 	label: string
-	icon: (props: { size?: number; className?: string }) => React.ReactNode
+	icon: (props: { size?: number; className?: string }) => ReactNode
 	/** Applied to the chip's container when selected (border + bg). */
 	selectedClass: string
 	/** Applied to the icon at all times so the *unselected* chips still hint
@@ -159,7 +166,11 @@ const SEVERITY_OPTIONS: ReadonlyArray<{
 	},
 ]
 
-export function SignalAndThresholdSection({ form, onChange }: SignalAndThresholdSectionProps) {
+export function SignalAndThresholdSection({
+	form,
+	onChange,
+	autocompleteValues,
+}: SignalAndThresholdSectionProps) {
 	const rangeMode = isRangeComparator(form.comparator)
 	// error_rate thresholds are entered as a percent (the form↔domain helpers in
 	// form-utils convert to/from the stored 0–1 ratio).
@@ -205,7 +216,11 @@ export function SignalAndThresholdSection({ form, onChange }: SignalAndThreshold
 					/>
 				)}
 
-				<SignalSubConfig form={form} onChange={onChange} />
+				<SignalSubConfig
+					form={form}
+					onChange={onChange}
+					autocompleteValues={autocompleteValues}
+				/>
 
 				{/* Threshold row — comparator + value(s). Upper threshold stays mounted but
 				    disabled outside range mode so the grid never reflows. The
@@ -512,73 +527,139 @@ function NumericField({
 /*  Signal-specific sub-config                                                */
 /* -------------------------------------------------------------------------- */
 
-function SignalSubConfig({ form, onChange }: SignalAndThresholdSectionProps) {
-	switch (form.signalType) {
-		case "metric":
-			return (
-				<div className="grid gap-3 sm:grid-cols-[1fr_140px_140px]">
-					<div className="space-y-1.5">
-						<Label htmlFor="metric-name" className="text-xs">
-							Metric name
-						</Label>
-						<Input
-							id="metric-name"
-							value={form.metricName}
-							onChange={(e) =>
-								onChange((c) => ({ ...c, metricName: e.target.value }))
-							}
-							placeholder="http.server.duration"
-							className="font-mono"
-						/>
-					</div>
-					<div className="space-y-1.5">
-						<Label className="text-xs">Type</Label>
-						<Select
-							items={metricTypeLabels}
-							value={form.metricType}
-							onValueChange={(value) =>
-								onChange((c) => ({ ...c, metricType: value as AlertMetricType }))
-							}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{Object.entries(metricTypeLabels).map(([val, label]) => (
-									<SelectItem key={val} value={val}>
-										{label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					<div className="space-y-1.5">
-						<Label className="text-xs">Aggregate</Label>
-						<Select
-							items={metricAggregationLabels}
-							value={form.metricAggregation}
-							onValueChange={(value) =>
-								onChange((c) => ({
-									...c,
-									metricAggregation: value as AlertMetricAggregation,
-								}))
-							}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{Object.entries(metricAggregationLabels).map(([val, label]) => (
-									<SelectItem key={val} value={val}>
-										{label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-				</div>
-			)
+type MetricRow = {
+	metricName: string
+	metricType: string
+	serviceName: string
+	isMonotonic: boolean
+}
 
+function applyQueryDraftToForm(
+	current: RuleFormState,
+	queryBuilderDraft: QueryBuilderQueryDraft,
+): RuleFormState {
+	return {
+		...current,
+		signalType: "builder_query",
+		queryBuilderDraft,
+		queryDataSource: queryBuilderDraft.dataSource,
+		queryAggregation: queryBuilderDraft.aggregation,
+		queryWhereClause: queryBuilderDraft.whereClause,
+		metricName:
+			queryBuilderDraft.dataSource === "metrics"
+				? queryBuilderDraft.metricName
+				: current.metricName,
+		metricType:
+			queryBuilderDraft.dataSource === "metrics"
+				? queryBuilderDraft.metricType
+				: current.metricType,
+	}
+}
+
+function useAlertMetricSelectionOptions(query: QueryBuilderQueryDraft) {
+	const [metricSearch, setMetricSearch] = useState("")
+	const deferredMetricSearch = useDeferredValue(metricSearch)
+	const metricsResult = useAtomValue(
+		query.dataSource === "metrics"
+			? listMetricsResultAtom({ data: { limit: 100, search: deferredMetricSearch || undefined } })
+			: disabledResultAtom(),
+	)
+
+	const metricRows = useMemo(
+		(): MetricRow[] =>
+			Result.builder(metricsResult)
+				.onSuccess((response) => (response as { data: MetricRow[] }).data)
+				.orElse(() => []),
+		[metricsResult],
+	)
+
+	const metricSelectionOptions = useMemo(() => {
+		const seen = new Set<string>()
+		const options: Array<{ value: string; label: string; isMonotonic: boolean }> = []
+		for (const row of metricRows) {
+			if (
+				row.metricType !== "sum" &&
+				row.metricType !== "gauge" &&
+				row.metricType !== "histogram" &&
+				row.metricType !== "exponential_histogram"
+			) {
+				continue
+			}
+			const value = `${row.metricName}::${row.metricType}`
+			if (seen.has(value)) continue
+			seen.add(value)
+			options.push({
+				value,
+				label: `${row.metricName} (${row.metricType})`,
+				isMonotonic: row.isMonotonic,
+			})
+		}
+		return options
+	}, [metricRows])
+
+	return { metricSelectionOptions, setMetricSearch }
+}
+
+function AlertQueryPanel({
+	form,
+	onChange,
+	autocompleteValues,
+}: SignalAndThresholdSectionProps) {
+	const query = form.queryBuilderDraft as QueryBuilderQueryDraft
+	const { metricSelectionOptions, setMetricSearch } = useAlertMetricSelectionOptions(query)
+
+	const updateQuery = (updater: (query: QueryBuilderQueryDraft) => QueryBuilderQueryDraft) => {
+		onChange((current) =>
+			applyQueryDraftToForm(current, updater(current.queryBuilderDraft as QueryBuilderQueryDraft)),
+		)
+	}
+
+	return (
+		<QueryPanel
+			query={query}
+			index={0}
+			canRemove={false}
+			metricSelectionOptions={metricSelectionOptions}
+			onMetricSearch={setMetricSearch}
+			autocompleteValues={autocompleteValues}
+			onUpdate={updateQuery}
+			onAggregationChange={(aggregation) =>
+				updateQuery((current) => ({ ...current, aggregation }))
+			}
+			onMetricSelectionChange={(selection) =>
+				updateQuery((current) =>
+					current.dataSource === "metrics"
+						? {
+								...current,
+								metricName: selection.metricName,
+								metricType: selection.metricType,
+								isMonotonic: selection.isMonotonic,
+								aggregation: resetAggregationForMetricType(
+									current.aggregation,
+									selection.metricType,
+									selection.isMonotonic,
+								),
+							}
+						: current,
+				)
+			}
+			onClone={() => {}}
+			onRemove={() => {}}
+			onDataSourceChange={(dataSource: QueryBuilderDataSource) =>
+				updateQuery((current) => resetQueryForDataSource(current, dataSource))
+			}
+			showHeaderActions={false}
+			showVisibilityToggle={false}
+		/>
+	)
+}
+
+function SignalSubConfig({
+	form,
+	onChange,
+	autocompleteValues,
+}: SignalAndThresholdSectionProps) {
+	switch (form.signalType) {
 		case "apdex":
 			return (
 				<div className="flex items-end gap-3">
@@ -603,134 +684,22 @@ function SignalSubConfig({ form, onChange }: SignalAndThresholdSectionProps) {
 			)
 
 		case "builder_query":
-			return (
-				<div className="space-y-3">
-					<div className="grid gap-3 sm:grid-cols-[auto_1fr]">
-						<div className="space-y-1.5">
-							<Label className="text-xs">Source</Label>
-							<AlertSegmentedSelect<"traces" | "logs" | "metrics">
-								options={[
-									{ value: "traces", label: "Traces" },
-									{ value: "logs", label: "Logs" },
-									{ value: "metrics", label: "Metrics" },
-								]}
-								value={form.queryDataSource}
-								onChange={(ds) =>
-									onChange((c) => ({
-										...c,
-										queryDataSource: ds,
-										queryAggregation:
-											AGGREGATIONS_BY_SOURCE[ds][0].value,
-									}))
-								}
-								aria-label="Query data source"
-								size="sm"
-							/>
-						</div>
-						<div className="space-y-1.5">
-							<Label className="text-xs">Aggregate</Label>
-							<Select
-								items={AGGREGATIONS_BY_SOURCE[form.queryDataSource]}
-								value={form.queryAggregation}
-								onValueChange={(value) =>
-									value &&
-									onChange((c) => ({ ...c, queryAggregation: value }))
-								}
-							>
-								<SelectTrigger className="w-full">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{AGGREGATIONS_BY_SOURCE[form.queryDataSource].map((agg) => (
-										<SelectItem key={agg.value} value={agg.value}>
-											{agg.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-					</div>
-
-					{form.queryDataSource === "metrics" && (
-						<div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-							<div className="space-y-1.5">
-								<Label htmlFor="query-metric-name" className="text-xs">
-									Metric name
-								</Label>
-								<Input
-									id="query-metric-name"
-									value={form.metricName}
-									onChange={(e) =>
-										onChange((c) => ({
-											...c,
-											metricName: e.target.value,
-										}))
-									}
-									placeholder="http.server.duration"
-									className="font-mono"
-								/>
-							</div>
-							<div className="space-y-1.5">
-								<Label className="text-xs">Type</Label>
-								<Select
-									items={metricTypeLabels}
-									value={form.metricType}
-									onValueChange={(value) =>
-										onChange((c) => ({
-											...c,
-											metricType: value as AlertMetricType,
-										}))
-									}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{Object.entries(metricTypeLabels).map(([val, label]) => (
-											<SelectItem key={val} value={val}>
-												{label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-						</div>
-					)}
-
-					<div className="space-y-1.5">
-						<Label className="text-xs">Where</Label>
-						<WhereClauseEditor
-							dataSource={form.queryDataSource}
-							value={form.queryWhereClause}
-							onChange={(value) =>
-								onChange((c) => ({ ...c, queryWhereClause: value }))
-							}
-							rows={2}
-							placeholder='service.name = "payments" AND has_error = true'
-						/>
-					</div>
-				</div>
-			)
+			return <AlertQueryPanel form={form} onChange={onChange} autocompleteValues={autocompleteValues} />
 
 		case "raw_query":
 			return (
 				<div className="space-y-3">
-					<div className="space-y-1.5">
-						<Label htmlFor="raw-query-sql" className="text-xs">
-							ClickHouse SQL
-						</Label>
-						<SqlCodeEditor
-							id="raw-query-sql"
-							value={form.rawQuerySql}
-							onChange={(value) =>
-								onChange((c) => ({ ...c, rawQuerySql: value }))
-							}
-						/>
-						<p className="text-muted-foreground text-[10px] leading-tight">
-							Return a numeric <code>value</code> column. Must reference{" "}
-							<code>$__orgFilter</code>.
-						</p>
-					</div>
+					<RawSqlEditorPanel
+						draft={{ sql: form.rawQuerySql, granularitySeconds: null }}
+						onDraftChange={(draft) =>
+							onChange((current) => ({ ...current, rawQuerySql: draft.sql }))
+						}
+						showBucketControl={false}
+						targetLabel="alert rule"
+					/>
+					<p className="text-muted-foreground text-[10px] leading-tight">
+						Alert SQL must return a numeric <code>value</code> column.
+					</p>
 					<div className="flex items-end gap-3">
 						<div className="space-y-1.5">
 							<Label className="text-xs">Reduce buckets by</Label>

@@ -865,6 +865,36 @@ describe("makeQueryEngineEvaluateRawSql", () => {
 		}),
 	)
 
+	it.effect("fails with a validation error when returned rows omit the value column", () =>
+		Effect.gen(function* () {
+			const evaluateRawSql = makeQueryEngineEvaluateRawSql(
+				makeTinybirdStub({
+					sqlQuery: () => Effect.succeed([{ bucket: "2026-01-01 00:00:00", errors: 42 }]),
+				}),
+			)
+
+			const exit = yield* Effect.exit(
+				evaluateRawSql(tenant, {
+					startTime: "2026-01-01 00:00:00",
+					endTime: "2026-01-01 00:05:00",
+					sql: "SELECT bucket, errors FROM otel_traces WHERE $__orgFilter",
+					reducer: "identity",
+					windowMinutes: 5,
+				}),
+			)
+			const failure = Option.getOrUndefined(Exit.findErrorOption(exit)) as
+				| { _tag?: string; message?: string; details?: readonly string[] }
+				| undefined
+
+			assert.isTrue(Exit.isFailure(exit))
+			assert.strictEqual(failure?._tag, "@maple/http/errors/QueryEngineValidationError")
+			assert.strictEqual(failure?.message, "Invalid raw SQL alert query")
+			assert.deepStrictEqual(failure?.details, [
+				"Raw SQL alert queries must return a column named value.",
+			])
+		}),
+	)
+
 	it.effect("fails with a validation error when the SQL omits $__orgFilter", () =>
 		Effect.gen(function* () {
 			const evaluateRawSql = makeQueryEngineEvaluateRawSql(

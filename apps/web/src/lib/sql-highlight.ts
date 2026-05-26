@@ -18,35 +18,50 @@ function escapeHtml(s: string): string {
 		.replace(/>/g, "&gt;")
 }
 
-export function highlightSql(code: string): string {
-	let out = ""
+export interface SqlHighlightToken {
+	text: string
+	start: number
+	className?: string
+}
+
+export function tokenizeSql(code: string): SqlHighlightToken[] {
+	const tokens: SqlHighlightToken[] = []
 	let last = 0
 	TOKEN_RE.lastIndex = 0
 	let m: RegExpExecArray | null
 	while ((m = TOKEN_RE.exec(code)) !== null) {
-		if (m.index > last) out += escapeHtml(code.slice(last, m.index))
+		if (m.index > last) tokens.push({ text: code.slice(last, m.index), start: last })
 		const [full, comment, str, macro, num, ident] = m
 		if (comment) {
-			out += `<span class="text-muted-foreground/70 italic">${escapeHtml(comment)}</span>`
+			tokens.push({ text: comment, start: m.index, className: "text-muted-foreground/70 italic" })
 		} else if (str) {
-			out += `<span class="text-severity-info">${escapeHtml(str)}</span>`
+			tokens.push({ text: str, start: m.index, className: "text-severity-info" })
 		} else if (macro) {
-			out += `<span class="text-primary font-medium">${escapeHtml(macro)}</span>`
+			tokens.push({ text: macro, start: m.index, className: "text-primary font-medium" })
 		} else if (num) {
-			out += `<span class="text-amber-400">${escapeHtml(num)}</span>`
+			tokens.push({ text: num, start: m.index, className: "text-amber-400" })
 		} else if (ident) {
 			if (KEYWORDS.has(ident.toUpperCase())) {
-				out += `<span class="text-fuchsia-400">${escapeHtml(ident)}</span>`
+				tokens.push({ text: ident, start: m.index, className: "text-fuchsia-400" })
 			} else if (code.charAt(m.index + ident.length) === "(") {
-				out += `<span class="text-cyan-400">${escapeHtml(ident)}</span>`
+				tokens.push({ text: ident, start: m.index, className: "text-cyan-400" })
 			} else {
-				out += escapeHtml(ident)
+				tokens.push({ text: ident, start: m.index })
 			}
 		} else {
-			out += escapeHtml(full)
+			tokens.push({ text: full, start: m.index })
 		}
 		last = m.index + full.length
 	}
-	if (last < code.length) out += escapeHtml(code.slice(last))
-	return out
+	if (last < code.length) tokens.push({ text: code.slice(last), start: last })
+	return tokens
+}
+
+export function highlightSql(code: string): string {
+	return tokenizeSql(code)
+		.map((token) => {
+			const text = escapeHtml(token.text)
+			return token.className ? `<span class="${token.className}">${text}</span>` : text
+		})
+		.join("")
 }

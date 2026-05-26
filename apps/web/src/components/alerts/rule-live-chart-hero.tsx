@@ -60,6 +60,14 @@ export function RuleLiveChartHero({
 
 	const isRawQuery = form.signalType === "raw_query"
 	const safeThreshold = Number.isFinite(threshold) ? threshold : 0
+	const groupBySummary = formatGroupBySummary(form)
+	const hasPreviewSeries = chartData.some((row) =>
+		Object.keys(row).some((key) => key !== "bucket"),
+	)
+	const emptyMessage =
+		form.signalType === "builder_query"
+			? "No series returned for this query in the last 24h"
+			: "No preview data for this signal in the last 24h"
 
 	return (
 		<Card className="overflow-hidden">
@@ -69,6 +77,11 @@ export function RuleLiveChartHero({
 						{signalLabels[form.signalType]}
 					</Badge>
 					<span className="text-muted-foreground text-xs">Live · last 24h</span>
+					{groupBySummary && (
+						<span className="hidden max-w-[360px] truncate text-muted-foreground text-xs md:inline">
+							Grouped by {groupBySummary}
+						</span>
+					)}
 					{!isRawQuery && <BreachPill stats={stats} />}
 				</div>
 				<div className="flex items-center gap-2">
@@ -98,6 +111,8 @@ export function RuleLiveChartHero({
 			<div className="px-4 pb-4">
 				{isRawQuery ? (
 					<RawQueryPreviewPlaceholder />
+				) : !chartLoading && !hasPreviewSeries ? (
+					<EmptyPreviewPlaceholder message={emptyMessage} />
 				) : (
 					<AlertPreviewChart
 						data={chartData}
@@ -109,6 +124,24 @@ export function RuleLiveChartHero({
 				)}
 			</div>
 		</Card>
+	)
+}
+
+function formatGroupBySummary(form: RuleFormState): string | null {
+	const groupBy =
+		form.signalType === "builder_query" && form.queryBuilderDraft.addOns?.groupBy
+			? (form.queryBuilderDraft.groupBy ?? [])
+			: form.groupBy
+	const visible = groupBy.filter((value) => value !== "none")
+	if (visible.length === 0) return null
+	return visible.join(", ")
+}
+
+function EmptyPreviewPlaceholder({ message }: { message: string }) {
+	return (
+		<div className="flex h-[220px] w-full items-center justify-center rounded-md border border-dashed bg-muted/20 px-6 text-center">
+			<p className="text-muted-foreground text-sm">{message}</p>
+		</div>
 	)
 }
 

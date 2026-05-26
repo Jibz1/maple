@@ -24,7 +24,7 @@ import {
 } from "@maple/domain/http"
 import type { QueryEngineAlertReducer } from "@maple/query-engine"
 import { Cause, Exit, Option } from "effect"
-import { buildTimeseriesQuerySpec } from "@/lib/query-builder/model"
+import { buildTimeseriesQuerySpec, createQueryDraft } from "@/lib/query-builder/model"
 import { formatErrorRate, formatLatency, formatNumber } from "@/lib/format"
 
 export type RuleFormState = {
@@ -62,6 +62,7 @@ export type RuleFormState = {
 	queryDataSource: "traces" | "logs" | "metrics"
 	queryAggregation: string
 	queryWhereClause: string
+	queryBuilderDraft: QueryBuilderQueryDraftPayload
 	/** Editing fields for the `raw_query` signal. */
 	rawQuerySql: string
 	rawQueryReducer: QueryEngineAlertReducer
@@ -195,6 +196,7 @@ export function parseNonNegativeNumber(value: string, fallback: number): number 
 }
 
 export function defaultRuleForm(serviceName?: string): RuleFormState {
+	const queryBuilderDraft = createQueryDraft(0)
 	return {
 		name: "",
 		notes: "",
@@ -219,13 +221,36 @@ export function defaultRuleForm(serviceName?: string): RuleFormState {
 		queryDataSource: "traces",
 		queryAggregation: "count",
 		queryWhereClause: "",
+		queryBuilderDraft,
 		rawQuerySql: DEFAULT_RAW_QUERY_SQL,
 		rawQueryReducer: "identity",
 		destinationIds: [],
 	}
 }
 
+function metricRuleToQueryBuilderDraft(rule: AlertRuleDocument): QueryBuilderQueryDraftPayload {
+	return {
+		...createQueryDraft(0),
+		dataSource: "metrics",
+		aggregation: rule.metricAggregation ?? "avg",
+		metricName: rule.metricName ?? "",
+		metricType: rule.metricType ?? "gauge",
+		isMonotonic: rule.metricType === "sum",
+		groupBy: rule.groupBy ? [...rule.groupBy] : [],
+		addOns: {
+			groupBy: (rule.groupBy?.length ?? 0) > 0,
+			having: false,
+			orderBy: false,
+			limit: false,
+			legend: false,
+		},
+	}
+}
+
 export function ruleToFormState(rule: AlertRuleDocument): RuleFormState {
+	const queryBuilderDraft =
+		rule.queryBuilderDraft ??
+		(rule.signalType === "metric" ? metricRuleToQueryBuilderDraft(rule) : createQueryDraft(0))
 	return {
 		name: rule.name,
 		notes: rule.notes ?? "",
@@ -234,7 +259,7 @@ export function ruleToFormState(rule: AlertRuleDocument): RuleFormState {
 		serviceNames: rule.serviceNames?.length > 0 ? [...rule.serviceNames] : [],
 		excludeServiceNames: rule.excludeServiceNames?.length > 0 ? [...rule.excludeServiceNames] : [],
 		groupBy: rule.groupBy ? [...rule.groupBy] : [],
-		signalType: rule.signalType,
+		signalType: rule.signalType === "metric" ? "builder_query" : rule.signalType,
 		comparator: rule.comparator,
 		threshold: domainThresholdToForm(rule.signalType, rule.threshold),
 		thresholdUpper:
@@ -251,6 +276,7 @@ export function ruleToFormState(rule: AlertRuleDocument): RuleFormState {
 		queryDataSource: rule.queryBuilderDraft?.dataSource ?? "traces",
 		queryAggregation: rule.queryBuilderDraft?.aggregation ?? "count",
 		queryWhereClause: rule.queryBuilderDraft?.whereClause ?? "",
+		queryBuilderDraft,
 		rawQuerySql: rule.rawQuerySql ?? DEFAULT_RAW_QUERY_SQL,
 		rawQueryReducer: rule.rawQueryReducer ?? "identity",
 		destinationIds: [...rule.destinationIds],
@@ -263,6 +289,8 @@ export function ruleToFormState(rule: AlertRuleDocument): RuleFormState {
  * the alert evaluates through the identical compiler.
  */
 export function buildQueryDraftFromForm(form: RuleFormState): QueryBuilderQueryDraftPayload {
+	if (form.signalType === "builder_query") return form.queryBuilderDraft
+
 	// Fold a single selected service into the where clause — builder_query draws
 	// all filtering from the draft, not the rule-level service scope.
 	const userWhere = form.queryWhereClause.trim()
@@ -295,16 +323,72 @@ export function buildQueryDraftFromForm(form: RuleFormState): QueryBuilderQueryD
 	return { ...base, dataSource: form.queryDataSource }
 }
 
+export type AlertPreviewGroupBy =
+	| "service"
+	| "span_name"
+	| "status_code"
+	| "http_method"
+	| "severity"
+	| "attribute"
+	| "none"
+
+function firstPreviewGroupBy(value: readonly string[] | undefined): AlertPreviewGroupBy | undefined {
+	const first = value?.[0]
+	if (
+		first === "service" ||
+		first === "span_name" ||
+		first === "status_code" ||
+		first === "http_method" ||
+		first === "severity" ||
+		first === "attribute" ||
+		first === "none"
+	) {
+		return first
+	}
+	return undefined
+}
+
+export function rawSqlHasValueColumn(sql: string): boolean {
+	const trimmed = sql.trim()
+	if (trimmed.length === 0) return false
+
+	if (/\bas\s+["`]?value["`]?\b/i.test(trimmed)) return true
+
+	const firstFrom = trimmed.search(/\bfrom\b/i)
+	const selectHead = firstFrom >= 0 ? trimmed.slice(0, firstFrom) : trimmed.slice(0, 500)
+	return /(?:\bselect\b|,)\s*["`]?value["`]?\s*(?:,|$)/i.test(selectHead)
+}
+
+export function deriveRuleQueryIssues(form: RuleFormState): string[] {
+	const issues: string[] = []
+	if (form.signalType === "builder_query") {
+		const built = buildTimeseriesQuerySpec(buildQueryDraftFromForm(form))
+		if (built.error != null || built.query == null) {
+			issues.push(`Query: ${built.error ?? "failed to build query"}`)
+		}
+	}
+	if (form.signalType === "raw_query") {
+		const sql = form.rawQuerySql.trim()
+		if (sql.length > 0 && !rawSqlHasValueColumn(sql)) {
+			issues.push("SQL value column")
+		}
+	}
+	return issues
+}
+
 export function buildRuleRequest(form: RuleFormState): AlertRuleUpsertRequest {
 	const signalType = form.signalType
+	const queryOwnsScope = signalType === "builder_query" || signalType === "raw_query"
 	return new AlertRuleUpsertRequest({
 		name: form.name.trim(),
 		notes: form.notes.trim() || null,
 		enabled: form.enabled,
 		severity: form.severity,
-		serviceNames: form.serviceNames.filter((s) => s.trim().length > 0),
-		excludeServiceNames: form.excludeServiceNames.filter((s) => s.trim().length > 0),
-		groupBy: form.groupBy.length > 0 ? form.groupBy : null,
+		serviceNames: queryOwnsScope ? [] : form.serviceNames.filter((s) => s.trim().length > 0),
+		excludeServiceNames: queryOwnsScope
+			? []
+			: form.excludeServiceNames.filter((s) => s.trim().length > 0),
+		groupBy: queryOwnsScope ? null : form.groupBy.length > 0 ? form.groupBy : null,
 		signalType,
 		comparator: form.comparator,
 		threshold: formThresholdToDomain(signalType, form.threshold),
@@ -345,13 +429,15 @@ export function isRulePreviewReady(form: RuleFormState): boolean {
 	if (isRangeComparator(form.comparator) && !Number.isFinite(Number(form.thresholdUpper))) {
 		return false
 	}
-	if (form.signalType === "builder_query" && form.queryDataSource === "metrics") {
-		return form.metricName.trim().length > 0
-	}
+	if (form.signalType === "builder_query") return deriveRuleQueryIssues(form).length === 0
 	if (form.signalType === "raw_query") {
-		return form.rawQuerySql.trim().length > 0 && form.rawQuerySql.includes("$__orgFilter")
+		return (
+			form.rawQuerySql.trim().length > 0 &&
+			form.rawQuerySql.includes("$__orgFilter") &&
+			deriveRuleQueryIssues(form).length === 0
+		)
 	}
-	return true
+	return deriveRuleQueryIssues(form).length === 0
 }
 
 /** Map signal type to the query engine source and metric fields */
@@ -360,6 +446,7 @@ export function signalToQueryParams(form: RuleFormState): {
 	metric: string
 	filters: Record<string, unknown>
 	apdexThresholdMs?: number
+	groupBy?: AlertPreviewGroupBy
 } | null {
 	const baseFilters = form.serviceNames.length === 1 ? { serviceName: form.serviceNames[0] } : {}
 
@@ -415,6 +502,7 @@ export function signalToQueryParams(form: RuleFormState): {
 				source: spec.source,
 				metric: "metric" in spec ? spec.metric : "count",
 				filters: (spec.filters as Record<string, unknown> | undefined) ?? {},
+				groupBy: firstPreviewGroupBy(spec.groupBy),
 			}
 		}
 		case "raw_query":

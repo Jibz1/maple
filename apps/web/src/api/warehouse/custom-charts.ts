@@ -173,6 +173,8 @@ const SharedFiltersSchema = Schema.Struct({
 	rootSpansOnly: Schema.optional(Schema.Boolean),
 	environments: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 	commitShas: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
+	groupByAttributeKeys: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
+	groupByAttributeKey: Schema.optional(Schema.String),
 	attributeFilters: Schema.optional(
 		Schema.mutable(
 			Schema.Array(
@@ -201,7 +203,15 @@ const CustomChartTimeSeriesInputSchema = Schema.Struct({
 	source: Schema.Literals(["traces", "logs", "metrics"]),
 	metric: Schema.String,
 	groupBy: Schema.optional(
-		Schema.Literals(["service", "span_name", "status_code", "severity", "attribute", "none"]),
+		Schema.Literals([
+			"service",
+			"span_name",
+			"status_code",
+			"http_method",
+			"severity",
+			"attribute",
+			"none",
+		]),
 	),
 	filters: Schema.optional(SharedFiltersSchema),
 	startTime: dateTimeString,
@@ -259,6 +269,7 @@ function buildTimeseriesQuerySpec(data: CustomChartTimeSeriesInput): QuerySpec |
 				rootSpansOnly: data.filters?.rootSpansOnly,
 				environments: data.filters?.environments,
 				commitShas: data.filters?.commitShas,
+				groupByAttributeKeys: data.filters?.groupByAttributeKeys,
 				attributeFilters: data.filters?.attributeFilters,
 				resourceAttributeFilters: data.filters?.resourceAttributeFilters,
 			},
@@ -294,21 +305,28 @@ function buildTimeseriesQuerySpec(data: CustomChartTimeSeriesInput): QuerySpec |
 	if (!data.filters?.metricName || !data.filters.metricType) {
 		return "metricName and metricType are required for metrics source"
 	}
-	if (data.groupBy && !["service", "none"].includes(data.groupBy)) {
+	if (data.groupBy && !["service", "attribute", "none"].includes(data.groupBy)) {
 		return `Unsupported metrics groupBy: ${data.groupBy}`
 	}
 
-	const metricsGroupBy = data.groupBy as "service" | "none" | undefined
+	const metricsGroupBy = data.groupBy as "service" | "attribute" | "none" | undefined
 
 	return {
 		kind: "timeseries",
 		source: "metrics",
 		metric: data.metric as MetricsMetric,
-		groupBy: metricsGroupBy === "none" ? ["none"] : ["service"],
+		groupBy:
+			metricsGroupBy === "none"
+				? ["none"]
+				: metricsGroupBy === "attribute"
+					? ["attribute"]
+					: ["service"],
 		filters: {
 			metricName: data.filters.metricName,
 			metricType: data.filters.metricType,
 			serviceName: data.filters.serviceName,
+			groupByAttributeKey: data.filters.groupByAttributeKey,
+			attributeFilters: data.filters.attributeFilters,
 		},
 		bucketSeconds: data.bucketSeconds,
 	}

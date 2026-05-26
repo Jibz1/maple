@@ -29,6 +29,7 @@ export function ScopeSection({
 	autocompleteValues,
 }: ScopeSectionProps) {
 	const hasSpecificServices = form.serviceNames.length > 0
+	const queryOwnsGrouping = form.signalType === "builder_query"
 
 	const effectiveDataSource =
 		form.signalType === "builder_query"
@@ -55,7 +56,10 @@ export function ScopeSection({
 								serviceNames: values,
 								// Clear group/exclude when narrowing to specific services so the
 								// disabled fields don't carry stale state into the submitted rule.
-								groupBy: values.length > 0 ? [] : c.groupBy,
+								groupBy:
+									values.length > 0 && c.signalType !== "builder_query"
+										? []
+										: c.groupBy,
 								excludeServiceNames: values.length > 0 ? [] : c.excludeServiceNames,
 							}))
 						}
@@ -63,25 +67,27 @@ export function ScopeSection({
 					/>
 				</div>
 
-				<div className="space-y-1.5">
-					<Label htmlFor="rule-group-by" className="text-xs">
-						Group by
-					</Label>
-					<GroupByMultiSelect
-						dataSource={effectiveDataSource}
-						value={form.groupBy}
-						onChange={(values) => onChange((c) => ({ ...c, groupBy: values }))}
-						attributeKeys={autocompleteValues[effectiveDataSource]?.attributeKeys}
-						placeholder="service.name"
-						className="w-full"
-						disabled={hasSpecificServices}
-					/>
-					{hasSpecificServices && (
-						<p className="text-muted-foreground text-[10px] leading-tight">
-							Disabled — each selected service is already its own group.
-						</p>
-					)}
-				</div>
+				{!queryOwnsGrouping && (
+					<div className="space-y-1.5">
+						<Label htmlFor="rule-group-by" className="text-xs">
+							Group by
+						</Label>
+						<GroupByMultiSelect
+							dataSource={effectiveDataSource}
+							value={form.groupBy}
+							onChange={(values) => onChange((c) => ({ ...c, groupBy: values }))}
+							attributeKeys={autocompleteValues[effectiveDataSource]?.attributeKeys}
+							placeholder="service.name"
+							className="w-full"
+							disabled={hasSpecificServices}
+						/>
+						{hasSpecificServices && (
+							<p className="text-muted-foreground text-[10px] leading-tight">
+								Disabled: each selected service is already its own group.
+							</p>
+						)}
+					</div>
+				)}
 
 				<div className="space-y-1.5">
 					<Label htmlFor="rule-exclude" className="text-xs">
@@ -98,7 +104,7 @@ export function ScopeSection({
 					/>
 					{hasSpecificServices && (
 						<p className="text-muted-foreground text-[10px] leading-tight">
-							Disabled — only applies when scoping to all services.
+							Disabled: only applies when scoping to all services.
 						</p>
 					)}
 				</div>

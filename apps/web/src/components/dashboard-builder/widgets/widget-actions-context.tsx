@@ -1,5 +1,4 @@
-import * as React from "react"
-import type { ReactNode } from "react"
+import { createContext, use, useMemo, type ReactNode } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { useDashboardActions } from "@/components/dashboard-builder/dashboard-actions-context"
@@ -17,7 +16,7 @@ export interface WidgetActions {
 	fix?: () => void
 }
 
-const WidgetActionsContext = React.createContext<WidgetActions | null>(null)
+const WidgetActionsContext = createContext<WidgetActions | null>(null)
 
 /**
  * Returns the widget actions provided by the nearest `WidgetActionsProvider`,
@@ -25,7 +24,7 @@ const WidgetActionsContext = React.createContext<WidgetActions | null>(null)
  * explicit action props instead).
  */
 export function useWidgetActions(): WidgetActions | null {
-	return React.use(WidgetActionsContext)
+	return use(WidgetActionsContext)
 }
 
 interface WidgetActionsProviderProps {
@@ -49,14 +48,14 @@ export function WidgetActionsProvider({ widget, dataState, children }: WidgetAct
 	const errorMessage = dataState.status === "error" ? (dataState.message ?? null) : null
 	const errorKind = dataState.status === "error" ? dataState.kind : undefined
 
-	const actions = React.useMemo<WidgetActions>(() => {
+	const actions = useMemo<WidgetActions>(() => {
 		const remove = () => removeWidget(widget.id)
 
 		const clone = readOnly ? undefined : () => cloneWidget(widget.id)
 		const configure = readOnly ? undefined : () => configureWidget(widget.id)
 
-		// "Create alert" is offered for query-driven charts (query builder + raw
-		// SQL) — those data sources convert cleanly to an alert rule.
+		// "Create alert" is offered for query-driven charts; the alert builder
+		// warns when chart-only features need review.
 		const endpoint = widget.dataSource?.endpoint
 		const alertable =
 			endpoint === "raw_sql_chart" ||

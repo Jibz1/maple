@@ -1762,6 +1762,16 @@ export const makeQueryEngineEvaluateRawSql = (warehouse: QueryEngineWarehouse) =
 			"alertRawQuery",
 		)
 
+		const missingValue = rows.find((row) => !Object.prototype.hasOwnProperty.call(row, "value"))
+		if (missingValue != null) {
+			return yield* Effect.fail(
+				new QueryEngineValidationError({
+					message: "Invalid raw SQL alert query",
+					details: ["Raw SQL alert queries must return a column named value."],
+				}),
+			)
+		}
+
 		const byGroup = new Map<
 			string,
 			Array<{ value: number | null; sampleCount: number; hasData: boolean }>
