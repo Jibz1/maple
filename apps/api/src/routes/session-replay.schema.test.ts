@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Schema } from "effect"
-import { ListReplaysResponse, SessionReplayListItem } from "@maple/domain/http"
+import { ListReplaysResponse, SessionEventItem, SessionReplayListItem } from "@maple/domain/http"
 
 // Regression for the prod 500 on /api/session-replays/list: self-recorded
 // sessions store UserId="" (no Clerk user passed to MapleBrowser.init), and
@@ -43,5 +43,38 @@ describe("SessionReplayListItem.userId", () => {
 	it("ListReplaysResponse constructs with a null-userId row", () => {
 		const res = new ListReplaysResponse({ data: [decodeItem(baseRow)] })
 		expect(res.data[0]?.userId).toBeNull()
+	})
+})
+
+// Distilled session events not tied to a trace (console/click/navigation, and —
+// because main.tsx sets instrumentFetch:false — network events too) store
+// TraceId="". The transcript response must permit a null trace id; the handler
+// maps "" -> null before decoding.
+const decodeEvent = Schema.decodeUnknownSync(SessionEventItem)
+
+const baseEvent = {
+	timestamp: "2026-05-26 08:29:28.065",
+	seq: 0,
+	type: "console",
+	url: "https://app.maple.dev/",
+	traceId: null,
+	level: "info",
+	message: "hello",
+	targetSelector: "",
+	targetText: "",
+	netMethod: "",
+	netUrl: "",
+	netStatus: 0,
+	netDurationMs: 0,
+	errorStack: "",
+}
+
+describe("SessionEventItem.traceId", () => {
+	it("accepts a null traceId (trace-less events)", () => {
+		expect(decodeEvent(baseEvent).traceId).toBeNull()
+	})
+
+	it("rejects an empty-string traceId — why the handler must map '' -> null", () => {
+		expect(() => decodeEvent({ ...baseEvent, traceId: "" })).toThrow()
 	})
 })

@@ -10,7 +10,7 @@ type EventRow = {
 	readonly timestamp: string
 	readonly type: string
 	readonly url: string
-	readonly traceId: string
+	readonly traceId: string | null
 	readonly level: string
 	readonly message: string
 	readonly targetSelector: string

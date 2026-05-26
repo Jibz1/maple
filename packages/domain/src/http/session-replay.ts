@@ -170,7 +170,7 @@ export const SessionEventItem = Schema.Struct({
 	seq: Schema.Number,
 	type: Schema.String,
 	url: Schema.String,
-	traceId: TraceId,
+	traceId: Schema.NullOr(TraceId),
 	level: Schema.String,
 	message: Schema.String,
 	targetSelector: Schema.String,

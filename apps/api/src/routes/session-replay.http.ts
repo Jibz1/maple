@@ -176,7 +176,7 @@ export const HttpSessionReplaysLive = HttpApiBuilder.group(MapleApi, "sessionRep
 					return new SessionTranscriptResponse({
 						data: compiled.castRows(rows).map((row) => ({
 							...row,
-							traceId: decodeTraceId(row.traceId),
+							traceId: row.traceId ? decodeTraceId(row.traceId) : null,
 						})),
 					})
 				}),
