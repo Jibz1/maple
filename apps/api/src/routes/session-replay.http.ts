@@ -51,7 +51,7 @@ export const HttpSessionReplaysLive = HttpApiBuilder.group(MapleApi, "sessionRep
 						data: compiled.castRows(rows).map((row) => ({
 							...row,
 							sessionId: decodeSessionId(row.sessionId),
-							userId: decodeUserId(row.userId),
+							userId: row.userId ? decodeUserId(row.userId) : null,
 						})),
 					})
 				}),
@@ -77,7 +77,7 @@ export const HttpSessionReplaysLive = HttpApiBuilder.group(MapleApi, "sessionRep
 							? {
 									...data,
 									sessionId: decodeSessionId(data.sessionId),
-									userId: decodeUserId(data.userId),
+									userId: data.userId ? decodeUserId(data.userId) : null,
 									traceIds: data.traceIds.map((traceId) => decodeTraceId(traceId)),
 								}
 							: null,

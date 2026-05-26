@@ -23,7 +23,7 @@ export interface SessionRow {
 	readonly startTime: string
 	readonly durationMs: number | null
 	readonly status: string
-	readonly userId: string
+	readonly userId: string | null
 	readonly urlInitial: string
 	readonly browserName: string
 	readonly osName: string
