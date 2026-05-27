@@ -222,8 +222,8 @@ function calculateMaple(values: Record<string, number>, competitor: Competitor) 
 	}
 
 	// Maple: 100 GB each for logs, traces, metrics = 300 GB total included
-	// Simplify: $0.25/GB overage beyond 300 GB total
-	const overage = Math.max(0, totalDataGB - 300) * 0.25
+	// Simplify: $0.30/GB overage beyond 300 GB total
+	const overage = Math.max(0, totalDataGB - 300) * 0.3
 
 	return {
 		total: baseCost + overage,
@@ -234,7 +234,7 @@ function calculateMaple(values: Record<string, number>, competitor: Competitor) 
 						{
 							label: "Overage",
 							value: overage,
-							detail: `${Math.round(totalDataGB - 300)} GB × $0.25`,
+							detail: `${Math.round(totalDataGB - 300)} GB × $0.30`,
 						},
 					]
 				: []),

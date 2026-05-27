@@ -127,6 +127,14 @@ export const nav_distributed_tracing = () => `分散トレーシング`
  * @returns {string}
  */
 /* @__NO_SIDE_EFFECTS__ */
+export const nav_browser_sessions = () => `Browser Sessions`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
 export const nav_metrics_dashboards = () => `メトリクス & ダッシュボード`
 
 
@@ -511,7 +519,31 @@ export const mcp_lede = () => `Maple ships with a first-class MCP server. Any co
  * @returns {string}
  */
 /* @__NO_SIDE_EFFECTS__ */
-export const k8s_eyebrow = () => `06 · Kubernetes`
+export const sessions_eyebrow = () => `06 · Sessions`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const sessions_title = () => `Watch what the user did.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const sessions_lede = () => `Session replay with every click, route, console line, and failed request captured. Replay and your spans share one session id — so you jump from the moment it broke straight to the trace behind it.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const k8s_eyebrow = () => `07 · Kubernetes`
 
 
 /**
@@ -759,7 +791,7 @@ export const bill_v_enterprise = () => `Enterprise tier`
  * @returns {string}
  */
 /* @__NO_SIDE_EFFECTS__ */
-export const bill_v_usage = () => `$0.25 / GB ingested`
+export const bill_v_usage = () => `$0.30 / GB ingested`
 
 
 /**
@@ -2908,6 +2940,142 @@ export const page_roadmap_heading = () => `構築中のもの`
  */
 /* @__NO_SIDE_EFFECTS__ */
 export const page_roadmap_subtitle = () => `Mapleの開発の透明なビュー。リリース済み、進行中、今後の方向性をご覧ください。`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_title = () => `Browser Sessions | Maple`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_desc = () => `See what your users actually did, then jump straight to the trace behind it. Full session replay with clicks, console, network, and errors on one timeline.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_label = () => `Browser Sessions`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_heading = () => `Watch the session. Jump to the trace.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_subtitle = () => `See exactly what the user did — every navigation, click, console line, network call, and error — each one tagged with the trace it triggered. Replay and your backend share one session id, so a single click takes you from what they saw to why it broke.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_timeline = () => `Session timeline`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_timeline_desc = () => `Every navigation, click, input, console line, network call, and error in one ordered stream you can scrub through.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_replay = () => `Pixel-perfect replay`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_replay_desc = () => `Watch the session play back exactly as the user experienced it — every scroll, input, and state change.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_correlation = () => `From replay to root cause`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_correlation_desc = () => `Replay and spans share one session id. Jump from any moment on screen to the exact trace behind it.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_capture = () => `Console & network, captured`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_capture_desc = () => `Console logs and network requests with status codes, recorded inline — so you see the failure, not just the symptom.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_errors = () => `Error context`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_errors_desc = () => `Exceptions and rejections land on the timeline right next to the actions that led up to them.`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_privacy = () => `Private by default`
+
+
+/**
+ * 
+ * @returns {string}
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export const page_bs_privacy_desc = () => `Mask inputs and text before anything leaves the browser. Tune sampling and redaction in a single line of setup.`
 
 
 /**
