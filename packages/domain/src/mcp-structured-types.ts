@@ -746,6 +746,7 @@ export interface SearchSessionsData {
 		matchCount: number
 		firstTimestamp: string
 		lastTimestamp: string
+		firstUrl: string
 	}>
 }
 

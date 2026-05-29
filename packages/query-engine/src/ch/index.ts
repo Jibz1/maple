@@ -205,12 +205,15 @@ export {
 // Queries — Session Replays
 export {
 	sessionReplaysListQuery,
+	sessionReplaysFacetsQuery,
 	getSessionReplayQuery,
 	sessionReplayEventsQuery,
 	sessionsForTraceQuery,
 	sessionTraceSummariesQuery,
 	type SessionReplaysListOpts,
 	type SessionReplaysListOutput,
+	type SessionReplaysFacetsOpts,
+	type SessionReplaysFacetsOutput,
 	type SessionReplayDetailOutput,
 	type SessionReplayEventsOutput,
 	type SessionsForTraceOpts,

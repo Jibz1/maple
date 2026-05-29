@@ -45,16 +45,38 @@ export const searchSessions = Effect.fn("Observability.searchSessions")(function
 	return compiled.castRows(rows)
 })
 
-/** Return the full distilled-event transcript for a single session, in order. */
-export const getSessionTranscript = Effect.fn("Observability.getSessionTranscript")(function* (input: {
+/**
+ * Return a page of the distilled-event transcript for a single session, in order.
+ * Bounded by `limit`/`offset` and optionally narrowed by event type / trace / errors-only,
+ * so a long session can't blow an agent's context window.
+ */
+export interface SessionTranscriptInput {
 	readonly sessionId: string
-}) {
+	readonly types?: readonly string[]
+	readonly traceId?: string
+	readonly errorsOnly?: boolean
+	readonly limit?: number
+	readonly offset?: number
+}
+
+export const getSessionTranscript = Effect.fn("Observability.getSessionTranscript")(function* (
+	input: SessionTranscriptInput,
+) {
 	const executor = yield* WarehouseExecutor
 	yield* Effect.annotateCurrentSpan({ orgId: executor.orgId, sessionId: input.sessionId })
-	const compiled = CH.compile(CH.sessionTranscriptQuery(), {
-		orgId: executor.orgId,
-		sessionId: input.sessionId,
-	})
+	const compiled = CH.compile(
+		CH.sessionTranscriptQuery({
+			types: input.types,
+			traceId: input.traceId,
+			errorsOnly: input.errorsOnly,
+			limit: input.limit,
+			offset: input.offset,
+		}),
+		{
+			orgId: executor.orgId,
+			sessionId: input.sessionId,
+		},
+	)
 	const rows = yield* executor.sqlQuery(compiled.sql, { profile: "list" })
 	return compiled.castRows(rows)
 })

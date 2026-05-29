@@ -4,6 +4,7 @@ import { compileCH, compileUnion } from "./compile"
 import { tracesTimeseriesQuery, tracesBreakdownQuery, tracesListQuery } from "./queries/traces"
 import { logsFacetsQuery } from "./queries/logs"
 import { servicesFacetsQuery } from "./queries/services"
+import { sessionReplaysFacetsQuery } from "./queries/session-replays"
 import { metricsSummaryQuery } from "./queries/metrics"
 import { tracesDurationStatsQuery, spanHierarchyQuery, spanDetailQuery } from "./queries/errors"
 import { unionAll } from "./union"
@@ -1013,6 +1014,32 @@ describe("converted queries", () => {
 		expect(sql).toContain("UNION ALL")
 		expect(sql).toContain("'environment' AS facetType")
 		expect(sql).toContain("'commit_sha' AS facetType")
+	})
+
+	it("sessionReplaysFacetsQuery compiles UNION ALL with uniq(SessionId)", () => {
+		const q = sessionReplaysFacetsQuery({})
+		const { sql } = compileUnion(q, baseParams)
+		expect(sql).toContain("UNION ALL")
+		expect(sql).toContain("uniq(SessionId) AS count")
+		expect(sql).toContain("'service' AS facetType")
+		expect(sql).toContain("'browser' AS facetType")
+		expect(sql).toContain("'country' AS facetType")
+		expect(sql).toContain("'device' AS facetType")
+		expect(sql).toContain("'error' AS facetType")
+		expect(sql).toContain("ORDER BY count DESC")
+	})
+
+	it("sessionReplaysFacetsQuery excludes each facet's own filter", () => {
+		const q = sessionReplaysFacetsQuery({ browser: "Chrome", deviceType: "mobile" })
+		const { sql } = compileUnion(q, baseParams)
+		// The browser branch must still see every browser (no BrowserName = 'Chrome'
+		// constraint), but other branches keep it so their counts respect the filter.
+		const branches = sql.split("UNION ALL")
+		const browserBranch = branches.find((b) => b.includes("'browser' AS facetType"))!
+		const serviceBranch = branches.find((b) => b.includes("'service' AS facetType"))!
+		expect(browserBranch).not.toContain("BrowserName = 'Chrome'")
+		expect(serviceBranch).toContain("BrowserName = 'Chrome'")
+		expect(serviceBranch).toContain("DeviceType = 'mobile'")
 	})
 
 	it("metricsSummaryQuery aggregates the metric_catalog rollup", () => {

@@ -4,6 +4,7 @@ import {
 	GetReplayEventsResponse,
 	GetReplayResponse,
 	ListReplaysResponse,
+	ReplaysFacetsResponse,
 	MapleApi,
 	ReplaysForTraceResponse,
 	SessionTranscriptResponse,
@@ -53,6 +54,43 @@ export const HttpSessionReplaysLive = HttpApiBuilder.group(MapleApi, "sessionRep
 							sessionId: decodeSessionId(row.sessionId),
 							userId: row.userId ? decodeUserId(row.userId) : null,
 						})),
+					})
+				}),
+			)
+			.handle("facets", ({ payload }) =>
+				Effect.gen(function* () {
+					const tenant = yield* CurrentTenant.Context
+					yield* Effect.annotateCurrentSpan({ "maple.org_id": tenant.orgId })
+					const compiled = CH.compileUnion(
+						CH.sessionReplaysFacetsQuery({
+							serviceName: payload.serviceName,
+							browser: payload.browser,
+							country: payload.country,
+							deviceType: payload.deviceType,
+							hasErrors: payload.hasErrors,
+							search: payload.search,
+						}),
+						{ orgId: tenant.orgId, startTime: payload.startTime, endTime: payload.endTime },
+					)
+					const rows = compiled.castRows(
+						yield* warehouse.sqlQuery(tenant, compiled.sql, {
+							profile: "list",
+							context: "replaysFacets",
+						}),
+					)
+					// ClickHouse serializes integer aggregates (`uniq(...)`) as JSON strings,
+					// while the Tinybird path returns numbers; castRows is a plain cast, so
+					// coerce at the edge before the Schema.Number response validates.
+					const pick = (facetType: string) =>
+						rows
+							.filter((row) => row.facetType === facetType)
+							.map((row) => ({ name: row.name, count: Number(row.count) }))
+					return new ReplaysFacetsResponse({
+						services: pick("service"),
+						browsers: pick("browser"),
+						countries: pick("country"),
+						devices: pick("device"),
+						errorCount: Number(rows.find((row) => row.facetType === "error")?.count ?? 0),
 					})
 				}),
 			)

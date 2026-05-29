@@ -76,6 +76,7 @@ import { getQueryBuilderTimeseries } from "@/api/warehouse/query-builder-timeser
 import {
 	getReplay,
 	getReplayEvents,
+	getReplaysFacets,
 	getReplaysForTrace,
 	getSessionTranscript,
 	getSessionTraceSummaries,
@@ -176,6 +177,10 @@ export const getTracesFacetsResultAtom = makeQueryAtomFamily(getTracesFacets, {
 export const getSpanHierarchyResultAtom = makeQueryAtomFamily(getSpanHierarchy)
 
 export const listReplaysResultAtom = makeQueryAtomFamily(listReplays, {
+	staleTime: 30_000,
+})
+
+export const replaysFacetsResultAtom = makeQueryAtomFamily(getReplaysFacets, {
 	staleTime: 30_000,
 })
 
