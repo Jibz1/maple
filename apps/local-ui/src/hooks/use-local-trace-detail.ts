@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { CH } from "@maple/query-engine"
 import { buildTraceDetail, type SpanHierarchyRow, type TraceDetail } from "@maple/ui/lib/span-tree"
-import { executeLocalQuery } from "@maple/query-engine/local"
+import { executeLocalQuery } from "@/lib/query"
 import { LOCAL_ORG_ID } from "../lib/constants"
 
 /**

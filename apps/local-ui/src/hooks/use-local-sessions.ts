@@ -4,7 +4,7 @@ import type {
 	SessionReplaysFacetsOutput,
 	SessionReplaysListOutput,
 } from "@maple/query-engine/ch"
-import { executeLocalQuery } from "@maple/query-engine/local"
+import { executeLocalQuery } from "@/lib/query"
 import { LOCAL_ORG_ID } from "../lib/constants"
 import { boundsForRange } from "../lib/time"
 import type { FilterOption } from "../components/filter-section"

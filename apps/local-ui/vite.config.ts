@@ -16,7 +16,9 @@ export default defineConfig({
 	resolve: {
 		dedupe: ["react", "react-dom"],
 	},
-	// Emit a static SPA whose assets the Rust binary embeds via rust-embed.
+	// Emit a static SPA. `dist/` is both deployed to local.maple.dev (the default
+	// UI) and inlined into the `maple` binary as the `--offline` fallback (via
+	// scripts/gen-ui-embed.ts → apps/cli/src/server/ui-embed.gen.ts).
 	build: {
 		outDir: "dist",
 		emptyOutDir: true,

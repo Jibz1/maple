@@ -6,8 +6,10 @@ import { openSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { startServer } from "../server/serve"
+import { checkStoreCompatible, storeMarkerJson, storeMarkerPath } from "../server/store-version"
 import { resolveUiAssets } from "../server/ui-assets"
 import { amber, bold, cyan, dim, green, underline } from "../lib/style"
+import { MAPLE_VERSION } from "../version"
 
 /** A `maple start`/`maple stop` failure. The message is shown to the user and
  *  the process exits non-zero — same role the old `process.exit(1)` paths had,
@@ -24,8 +26,14 @@ const prettyPath = (p: string): string => {
 	return p.startsWith(home) ? `~${p.slice(home.length)}` : p
 }
 
-/** The startup banner shown once the server is listening. */
-const startBanner = (addr: string, dataDir: string, hasUi: boolean): string => {
+/** Public origin of the deployed local-mode dashboard SPA. Overridable for
+ *  testing against staging (`local-staging.maple.dev`). */
+const remoteUiUrl = (): string => process.env.MAPLE_LOCAL_UI_URL?.trim() || "https://local.maple.dev"
+
+/** The startup banner shown once the server is listening. `dashboardUrl` is the
+ *  URL the user should open (the auto-updating `local.maple.dev` by default, or
+ *  the bundled UI on `127.0.0.1` with `--offline`); `undefined` when no UI. */
+const startBanner = (addr: string, dataDir: string, dashboardUrl: string | undefined, offline: boolean): string => {
 	const row = (key: string, value: string) => `  ${dim(key.padEnd(11))}${value}`
 	const lines = [
 		"",
@@ -34,7 +42,12 @@ const startBanner = (addr: string, dataDir: string, hasUi: boolean): string => {
 		"",
 		row("OTLP/HTTP", `POST ${dim("/v1/{traces,logs,metrics}")}`),
 		row("query", `POST ${dim("/local/query")}`),
-		...(hasUi ? [row("dashboard", cyan(`${addr}/`))] : []),
+		...(dashboardUrl
+			? [
+					row("dashboard", cyan(dashboardUrl)),
+					...(offline ? [] : [`  ${dim(" ".repeat(11))}${dim("· bundled UI: pass --offline")}`]),
+				]
+			: []),
 		row("data", prettyPath(dataDir)),
 		row("pid", `${process.pid}  ${dim("· stop with")} ${bold("maple stop")}`),
 		"",
@@ -82,6 +95,22 @@ const backgroundFlag = Flag.boolean("background").pipe(
 	Flag.withDefault(false),
 )
 
+const resetFlag = Flag.boolean("reset").pipe(
+	Flag.withDescription("Wipe the existing store (~/.maple/data) before starting — use after an incompatible upgrade"),
+	Flag.withDefault(false),
+)
+
+const yesFlag = Flag.boolean("yes").pipe(
+	Flag.withAlias("y"),
+	Flag.withDescription("Skip the confirmation prompt"),
+	Flag.withDefault(false),
+)
+
+const offlineFlag = Flag.boolean("offline").pipe(
+	Flag.withDescription("Use the UI bundled in this binary (served from 127.0.0.1) instead of local.maple.dev"),
+	Flag.withDefault(false),
+)
+
 // Log file for `--background` runs, beside the PID file (e.g. ~/.maple/maple.log).
 const logFilePath = (dataDir: string): string => join(dirname(dataDir), "maple.log")
 
@@ -104,7 +133,7 @@ const probeHealth = (addr: string): Effect.Effect<boolean> =>
  * file; we poll `/health` until it binds, then print a summary and return so the
  * parent process exits.
  */
-const startDetached = (port: number, dataDir: string): Effect.Effect<void, ServerError> =>
+const startDetached = (port: number, dataDir: string, offline: boolean): Effect.Effect<void, ServerError> =>
 	Effect.gen(function* () {
 		const logPath = logFilePath(dataDir)
 		// Rebuild the command explicitly rather than slicing argv: a Bun-compiled
@@ -113,7 +142,15 @@ const startDetached = (port: number, dataDir: string): Effect.Effect<void, Serve
 		// script and Bun needs it; in the compiled binary execPath alone suffices.
 		const entry = process.argv[1]
 		const runtimeArgs = entry && !entry.startsWith("/$bunfs") ? [entry] : []
-		const childArgs = [...runtimeArgs, "start", "--port", String(port), "--data-dir", dataDir]
+		const childArgs = [
+			...runtimeArgs,
+			"start",
+			"--port",
+			String(port),
+			"--data-dir",
+			dataDir,
+			...(offline ? ["--offline"] : []),
+		]
 
 		const child = yield* Effect.try({
 			try: () => {
@@ -158,7 +195,13 @@ const startDetached = (port: number, dataDir: string): Effect.Effect<void, Serve
 		)
 	})
 
-export const start = Command.make("start", { port, dataDir: dataDirFlag, background: backgroundFlag }).pipe(
+export const start = Command.make("start", {
+	port,
+	dataDir: dataDirFlag,
+	background: backgroundFlag,
+	offline: offlineFlag,
+	reset: resetFlag,
+}).pipe(
 	Command.withDescription("Start the local ingest + query server (embedded ClickHouse via chDB)"),
 	Command.withHandler(
 		Effect.fnUntraced(function* (a) {
@@ -175,10 +218,30 @@ export const start = Command.make("start", { port, dataDir: dataDirFlag, backgro
 			}
 			if (Option.isSome(existingPid)) yield* fs.remove(pidPath, { force: true }).pipe(Effect.ignore) // stale
 
+			// `--reset`: wipe the store (and its version marker) so we bootstrap fresh.
+			// The escape hatch when an existing store is from an incompatible build.
+			if (a.reset) {
+				yield* fs.remove(dataDir, { recursive: true, force: true }).pipe(Effect.ignore)
+				yield* fs.remove(storeMarkerPath(dataDir), { force: true }).pipe(Effect.ignore)
+			}
+
 			yield* fs.makeDirectory(dataDir, { recursive: true })
 
+			// Refuse to open a store written by an incompatible chDB build: re-loading
+			// its persisted materialized views crashes the C++ runtime natively
+			// (SIGTRAP), which we cannot catch. Fresh/matching stores pass through.
+			const compat = checkStoreCompatible(dataDir)
+			if (!compat.compatible) {
+				return yield* new ServerError({
+					message:
+						`the local store at ${prettyPath(dataDir)} is incompatible with this build's chDB ` +
+						`(store: ${compat.found}; build: ${compat.current}) — loading it would crash chDB. ` +
+						`Wipe it with \`${bold("maple reset")}\`, or start fresh via \`${bold("maple start --reset")}\`.`,
+				})
+			}
+
 			// Detached: spawn the same command without --background and exit.
-			if (a.background) return yield* startDetached(a.port, dataDir)
+			if (a.background) return yield* startDetached(a.port, dataDir, a.offline)
 
 			yield* Effect.sync(() =>
 				process.stderr.write(dim(`◌ opening chDB at ${prettyPath(dataDir)} (bootstrapping schema)…\n`)),
@@ -200,12 +263,26 @@ export const start = Command.make("start", { port, dataDir: dataDirFlag, backgro
 						Effect.mapError((e) => new ServerError({ message: `failed to start: ${e.message}` })),
 					)
 
+					// Bootstrap succeeded — stamp the store so a later start over an
+					// incompatible binary upgrade is detected instead of crashing.
+					yield* fs
+						.writeFileString(storeMarkerPath(dataDir), storeMarkerJson(MAPLE_VERSION, new Date().toISOString()))
+						.pipe(Effect.ignore)
+
 					yield* Effect.acquireRelease(fs.writeFileString(pidPath, String(process.pid)), () =>
 						fs.remove(pidPath, { force: true }).pipe(Effect.ignore),
 					)
 
 					const addr = `http://127.0.0.1:${boundPort}`
-					yield* Effect.sync(() => process.stdout.write(startBanner(addr, dataDir, assets !== undefined)))
+					// Default: send users to the auto-updating UI on local.maple.dev (it
+					// reaches this binary on loopback via the encoded ?port=). --offline:
+					// serve the bundled UI from this origin (only when one is embedded).
+					const dashboardUrl = a.offline
+						? assets !== undefined
+							? `${addr}/`
+							: undefined
+						: `${remoteUiUrl()}/?port=${boundPort}`
+					yield* Effect.sync(() => process.stdout.write(startBanner(addr, dataDir, dashboardUrl, a.offline)))
 
 					yield* Effect.never
 				}),
@@ -250,6 +327,39 @@ export const stop = Command.make("stop", { dataDir: dataDirFlag }).pipe(
 			return yield* new ServerError({
 				message: `\nmaple did not stop within 5s — force-kill with \`kill -9 ${pid}\``,
 			})
+		}),
+	),
+)
+
+export const reset = Command.make("reset", { dataDir: dataDirFlag, yes: yesFlag }).pipe(
+	Command.withDescription("Delete the local chDB store (~/.maple/data) so the next `maple start` bootstraps fresh"),
+	Command.withHandler(
+		Effect.fnUntraced(function* (a) {
+			const fs = yield* FileSystem
+			const dataDir = Option.getOrUndefined(a.dataDir) ?? defaultDataDir()
+
+			// Refuse while a server still owns the store.
+			const pidOpt = yield* readPid(fs, pidFilePath(dataDir))
+			if (Option.isSome(pidOpt) && isProcessAlive(pidOpt.value)) {
+				return yield* new ServerError({
+					message: `maple is running (PID ${pidOpt.value}) — stop it first with \`maple stop\``,
+				})
+			}
+
+			// Deleting a store is irreversible — require explicit confirmation.
+			if (!a.yes) {
+				yield* Effect.sync(() =>
+					process.stderr.write(
+						`This permanently deletes the local store at ${bold(prettyPath(dataDir))}.\n` +
+							`Re-run with ${bold("maple reset --yes")} to confirm.\n`,
+					),
+				)
+				return
+			}
+
+			yield* fs.remove(dataDir, { recursive: true, force: true }).pipe(Effect.ignore)
+			yield* fs.remove(storeMarkerPath(dataDir), { force: true }).pipe(Effect.ignore)
+			yield* Effect.sync(() => process.stderr.write(`${green("✓")} reset — removed ${prettyPath(dataDir)}\n`))
 		}),
 	),
 )

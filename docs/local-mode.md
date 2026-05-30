@@ -23,11 +23,18 @@ GitHub release, verifies its checksum, installs the two files into `~/.maple/bin
 clears the macOS Gatekeeper quarantine, and symlinks `maple` onto your PATH. Then:
 
 ```bash
-maple start        # OTLP ingest + embedded ClickHouse + UI on :4318
-maple start -d     # …or detached; logs to ~/.maple/maple.log, stop with `maple stop`
-maple services     # query the running server
+maple start            # OTLP ingest + embedded ClickHouse on :4318; UI from local.maple.dev
+maple start --offline  # …use the UI bundled in this binary (served from 127.0.0.1) instead
+maple start -d         # …or detached; logs to ~/.maple/maple.log, stop with `maple stop`
+maple services         # query the running server
 maple traces
 ```
+
+By default `maple start` points you at the auto-updating dashboard hosted at
+`local.maple.dev` (it talks back to this binary on loopback — see
+[Where the UI comes from](#where-the-ui-comes-from)). `--offline` serves the copy
+bundled into the binary instead, which also avoids the browser's local-network
+permission prompt. The startup banner prints the right URL for the mode you chose.
 
 Query commands accept `--format table` for an aligned table instead of JSON, and
 `--debug` to print the compiled SQL + per-query timing to stderr (stdout stays
@@ -61,7 +68,7 @@ the server, and it talks to the embedded ClickHouse engine **directly via
 | `maple start` server | `apps/cli/src/server/serve.ts` | A `Bun.serve` hosting OTLP/HTTP ingest (`POST /v1/{traces,logs,metrics}`), the query API (`POST /local/query`), and the bundled SPA — all on one port. |
 | Embedded ClickHouse | `apps/cli/src/server/chdb.ts` | `dlopen`s `libchdb` via `bun:ffi` (the `chdb_*` accessor C API) and holds a single connection for the process. |
 | OTLP → rows | `apps/cli/src/server/otlp/` | Decodes OTLP protobuf/JSON (protobufjs) and encodes each signal to per-table NDJSON, matching the generated `local-inserts.json` schema exactly. Ported from the production Rust encoders so row shapes can't diverge. |
-| Bundled UI (SPA) | `apps/local-ui` (Vite + React) | Hooks compile queries with `CH.compile(...)` and POST to `/local/query`. Built to `dist/` and inlined into the `maple` binary at build time (see [release bundle](#release-bundle)). |
+| UI (SPA) | `apps/local-ui` (Vite + React) | Hooks compile queries with `CH.compile(...)` and POST to `/local/query`. The same build is deployed to `local.maple.dev` (the default) **and** inlined into the binary as the `--offline` fallback (see [release bundle](#release-bundle)); it picks its query base URL from `window.location` at runtime (see [Where the UI comes from](#where-the-ui-comes-from)). |
 
 chDB allows exactly one connection per process and isn't safe to call
 concurrently — so the long-lived `maple start` process owns the connection, and
@@ -80,6 +87,37 @@ wraps line-delimited rows into a JSON array, so it always needs
 (`forceJsonEachRow` in `apps/cli/src/server/serve.ts`) strips any trailing
 `FORMAT <ident>` the client sent and re-appends `FORMAT JSONEachRow`. Clients
 therefore POST `compiled.sql` verbatim — no client-side format rewriting.
+
+## Where the UI comes from
+
+The dashboard SPA is a single build served two ways, and it decides which
+`/local/query` base URL to use from `window.location` (`localApiBase()` in
+[apps/local-ui/src/lib/constants.ts](../apps/local-ui/src/lib/constants.ts)):
+
+- **Default — `local.maple.dev`.** `maple start` points you at the SPA deployed to
+  `local.maple.dev` (a Cloudflare worker, `apps/local-ui/alchemy.run.ts`). This
+  decouples UI updates from binary releases: ship a UI fix by deploying, no new
+  binary. Because that page is a *public* origin, its queries to
+  `http://127.0.0.1:<port>/local/query` are a **public → loopback** request, which
+  trips the browser's **Private Network Access** gate. The server answers the
+  preflight with `Access-Control-Allow-Private-Network: true` (set on
+  `CORS_HEADERS` in [serve.ts](../apps/cli/src/server/serve.ts)), but recent Chrome
+  may still show a one-time "wants to access devices on your local network" prompt;
+  Safari/Firefox differ. The banner encodes the bound port as `?port=` so links
+  work on non-default ports.
+- **`--offline` (and dev) — same origin.** The binary serves the bundled SPA from
+  `127.0.0.1`, so queries are same-origin: no CORS, no Private Network Access, no
+  permission prompt, and it works with no internet. In dev the Vite server proxies
+  `/local/*` to the binary, which is the same same-origin path. This is the
+  recommended escape hatch whenever the default path hits a browser prompt.
+
+Because the remote UI auto-updates independently of the binary, keep the
+`/local/query` contract and the local chDB schema
+([apps/cli/src/server/schema/local-schema.sql](../apps/cli/src/server/schema/local-schema.sql))
+backward compatible — a newer UI may run against an older binary.
+
+`MAPLE_LOCAL_UI_URL` overrides the default UI origin (e.g. point a binary at
+`https://local-staging.maple.dev` for testing).
 
 ## Dev workflow
 
@@ -162,7 +200,8 @@ libchdb.so   # the chDB engine (~320 MB), downloaded from chdb-io/chdb-core rele
 
 The build (1) builds the SPA, (2) inlines `apps/local-ui/dist` into
 `apps/cli/src/server/ui-embed.gen.ts` so `bun build --compile` bakes it into the
-binary, (3) compiles `apps/cli`, and (4) downloads the matching `libchdb` beside
+binary as the `--offline` fallback (the default UI is served from
+`local.maple.dev`), (3) compiles `apps/cli`, and (4) downloads the matching `libchdb` beside
 the binary. At runtime `maple` `dlopen`s the sibling `libchdb` (resolved relative
 to its own path), so keep both files in the same directory — no `LD_LIBRARY_PATH`
 or rpath tricks.

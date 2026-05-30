@@ -44,6 +44,7 @@ bun run "$REPO_ROOT/scripts/gen-ui-embed.ts"
 echo "==> Compiling maple binary (bun build --compile) — version $MAPLE_BUILD_VERSION"
 ( cd "$REPO_ROOT" && bun build apps/cli/src/bin.ts --compile \
 	--define "__MAPLE_VERSION__=\"$MAPLE_BUILD_VERSION\"" \
+	--define "__CHDB_VERSION__=\"$LIBCHDB_VERSION\"" \
 	--outfile "$OUT_DIR/maple" )
 
 echo "==> Downloading libchdb $LIBCHDB_VERSION for this platform"

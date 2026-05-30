@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { CH } from "@maple/query-engine"
 import type { LogsListOutput } from "@maple/query-engine/ch"
-import { executeLocalQuery } from "@maple/query-engine/local"
+import { executeLocalQuery } from "@/lib/query"
 import { LOCAL_ORG_ID } from "../lib/constants"
 import { toClickHouseDateTime } from "../lib/time"
 import { normalizeLog, type LocalLog } from "../lib/log-shape"

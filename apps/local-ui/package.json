@@ -9,10 +9,12 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@maple/infra": "workspace:*",
 		"@maple/query-engine": "workspace:*",
 		"@maple/ui": "workspace:*",
 		"@tanstack/react-query": "^5.90.2",
 		"@tanstack/react-virtual": "^3.13.23",
+		"alchemy": "^0.91.2",
 		"react": "catalog:react",
 		"react-dom": "catalog:react",
 		"sonner": "^2.0.7",

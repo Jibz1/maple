@@ -27,6 +27,12 @@ const CORS_HEADERS = {
 	"access-control-allow-origin": "*",
 	"access-control-allow-methods": "GET, POST, OPTIONS",
 	"access-control-allow-headers": "content-type, content-encoding",
+	// The default-served UI lives at a public origin (local.maple.dev) but queries
+	// this loopback server, so Chrome's Private Network Access gate sends a
+	// preflight with `Access-Control-Request-Private-Network: true` and requires
+	// this header on the response. (`--offline` keeps the UI same-origin and skips
+	// the gate entirely.)
+	"access-control-allow-private-network": "true",
 } as const
 
 const json = (body: unknown, status = 200): Response =>
