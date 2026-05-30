@@ -1,4 +1,5 @@
 import { HttpSpanLabel } from "@maple/ui/components/traces/http-span-label"
+import { NetworkNodesIcon } from "@maple/ui/components/icons"
 import { Badge } from "@maple/ui/components/ui/badge"
 import { Button } from "@maple/ui/components/ui/button"
 import { Spinner } from "@maple/ui/components/ui/spinner"
@@ -25,7 +26,7 @@ import {
 } from "../components/filter-sidebar"
 import { PageShell } from "../components/page-shell"
 import { Toolbar, ToolbarSearch, ToolbarStat, TimeRangeSelect } from "../components/toolbar"
-import { EmptyState, ErrorState } from "../components/view-states"
+import { EmptyState, ErrorState, ListSkeleton } from "../components/view-states"
 
 interface TraceListViewProps {
 	onSelectTrace: (traceId: string) => void
@@ -39,7 +40,7 @@ export function TraceListView({ onSelectTrace }: TraceListViewProps) {
 	const search = query.get("q") || undefined
 
 	const services = useLocalServices(range)
-	const { data, isPending, isError, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+	const { data, isPending, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
 		useLocalTraces({ service, search, errorsOnly, range })
 	const rows = data?.pages.flat() ?? []
 
@@ -93,13 +94,12 @@ export function TraceListView({ onSelectTrace }: TraceListViewProps) {
 	return (
 		<PageShell sidebar={sidebar} toolbar={toolbar}>
 			{isPending ? (
-				<div className="flex h-full items-center justify-center">
-					<Spinner />
-				</div>
+				<ListSkeleton variant="table" />
 			) : isError ? (
-				<ErrorState label="traces" error={error} />
+				<ErrorState label="traces" error={error} onRetry={() => refetch()} />
 			) : rows.length === 0 ? (
 				<EmptyState
+					icon={<NetworkNodesIcon />}
 					title={hasActiveFilters || search ? "No matching traces" : "No traces yet"}
 					hint={
 						hasActiveFilters || search

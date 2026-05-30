@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { LogAttributeChip } from "@maple/ui/components/logs/log-attribute-chip"
+import { CodeIcon } from "@maple/ui/components/icons"
 import { Spinner } from "@maple/ui/components/ui/spinner"
 import { Separator } from "@maple/ui/components/ui/separator"
 import { pickImportantAttributes } from "@maple/ui/lib/log-attributes"
@@ -19,7 +20,7 @@ import {
 } from "../components/filter-sidebar"
 import { PageShell } from "../components/page-shell"
 import { Toolbar, ToolbarSearch, ToolbarStat, TimeRangeSelect } from "../components/toolbar"
-import { EmptyState, ErrorState } from "../components/view-states"
+import { EmptyState, ErrorState, ListSkeleton } from "../components/view-states"
 
 const ROW_HEIGHT = 36
 const VISIBLE_CHIPS = 4
@@ -33,7 +34,7 @@ export function LogsView() {
 
 	const services = useLocalServices(range)
 	const severities = useLocalLogSeverities(range)
-	const { data, isPending, isError, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+	const { data, isPending, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
 		useLocalLogs({ service, severity, search, range })
 
 	const rows = useMemo<ReadonlyArray<LocalLog>>(
@@ -119,13 +120,12 @@ export function LogsView() {
 	return (
 		<PageShell sidebar={sidebar} toolbar={toolbar}>
 			{isPending ? (
-				<div className="flex h-full items-center justify-center">
-					<Spinner />
-				</div>
+				<ListSkeleton variant="table" />
 			) : isError ? (
-				<ErrorState label="logs" error={error} />
+				<ErrorState label="logs" error={error} onRetry={() => refetch()} />
 			) : rows.length === 0 ? (
 				<EmptyState
+					icon={<CodeIcon />}
 					title={hasActiveFilters || search ? "No matching logs" : "No logs yet"}
 					hint={
 						hasActiveFilters || search

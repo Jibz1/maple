@@ -1,6 +1,9 @@
+import type { ReactNode } from "react"
 import { Toaster, toast } from "sonner"
 import { cn } from "@maple/ui/utils"
 import { AttributesProvider } from "@maple/ui/components/attributes"
+import { Badge } from "@maple/ui/components/ui/badge"
+import { CodeIcon, EyeIcon, NetworkNodesIcon } from "@maple/ui/components/icons"
 import { TraceListView } from "./views/trace-list-view"
 import { TraceDetailView } from "./views/trace-detail-view"
 import { LogsView } from "./views/logs-view"
@@ -8,6 +11,7 @@ import { SessionsListView } from "./views/sessions-list-view"
 import { SessionDetailView } from "./views/session-detail-view"
 import { navigate, useLocation } from "./lib/router"
 import { ConnectButton } from "./components/connect-button"
+import { IngestStatus } from "./components/ingest-status"
 import { highlightJson } from "./lib/highlight"
 
 // Stable references so the AttributesProvider context value keeps its identity
@@ -62,11 +66,35 @@ export function App() {
 		<AttributesProvider notifyCopied={notifyCopied} highlightJson={highlightJson}>
 			<div className="flex h-screen flex-col bg-background text-foreground">
 				<header className="flex shrink-0 items-center gap-1 border-b px-4 py-2">
-				<span className="mr-4 font-display text-sm font-semibold">Maple — Local</span>
-				<NavTab label="Traces" active={tab === "traces"} onClick={() => switchTab("/traces")} />
-				<NavTab label="Logs" active={tab === "logs"} onClick={() => switchTab("/logs")} />
-				<NavTab label="Sessions" active={tab === "sessions"} onClick={() => switchTab("/sessions")} />
-				<div className="ml-auto">
+				<span className="mr-3 flex items-center gap-1.5 font-display text-sm font-semibold">
+					Maple
+					<Badge
+						variant="secondary"
+						className="px-1.5 py-0 font-mono text-[10px] font-medium uppercase tracking-wider"
+					>
+						Local
+					</Badge>
+				</span>
+				<NavTab
+					label="Traces"
+					icon={<NetworkNodesIcon size={14} />}
+					active={tab === "traces"}
+					onClick={() => switchTab("/traces")}
+				/>
+				<NavTab
+					label="Logs"
+					icon={<CodeIcon size={14} />}
+					active={tab === "logs"}
+					onClick={() => switchTab("/logs")}
+				/>
+				<NavTab
+					label="Sessions"
+					icon={<EyeIcon size={14} />}
+					active={tab === "sessions"}
+					onClick={() => switchTab("/sessions")}
+				/>
+				<div className="ml-auto flex items-center gap-3">
+					<IngestStatus />
 					<ConnectButton />
 				</div>
 			</header>
@@ -100,16 +128,29 @@ export function App() {
 	)
 }
 
-function NavTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function NavTab({
+	label,
+	icon,
+	active,
+	onClick,
+}: {
+	label: string
+	icon?: ReactNode
+	active: boolean
+	onClick: () => void
+}) {
 	return (
 		<button
 			type="button"
 			onClick={onClick}
 			className={cn(
-				"rounded-md px-3 py-1 text-sm transition-colors",
+				"flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors",
 				active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground",
 			)}
 		>
+			{icon ? (
+				<span className={active ? "text-foreground" : "text-muted-foreground"}>{icon}</span>
+			) : null}
 			{label}
 		</button>
 	)

@@ -58,16 +58,9 @@ export function boundsForRange(key: string | undefined): TimeBounds {
 	}
 }
 
-/**
- * Compact relative-time label (`12s`, `4m`, `3h`, `2d`) from a ClickHouse
- * DateTime string. chDB emits UTC second-precision strings without a timezone
- * marker, so we append `Z` before parsing.
- */
-export function formatRelativeTime(chDateTime: string | null | undefined): string {
-	if (!chDateTime) return "—"
-	const parsed = Date.parse(`${chDateTime.replace(" ", "T")}Z`)
-	if (Number.isNaN(parsed)) return "—"
-	const deltaSec = Math.max(0, Math.round((Date.now() - parsed) / 1000))
+/** Compact relative-time label (`12s ago`, `4m ago`, `3h ago`, `2d ago`) from an epoch-ms instant. */
+export function formatRelativeMs(epochMs: number): string {
+	const deltaSec = Math.max(0, Math.round((Date.now() - epochMs) / 1000))
 	if (deltaSec < 60) return `${deltaSec}s ago`
 	const min = Math.round(deltaSec / 60)
 	if (min < 60) return `${min}m ago`
@@ -75,4 +68,26 @@ export function formatRelativeTime(chDateTime: string | null | undefined): strin
 	if (hr < 24) return `${hr}h ago`
 	const day = Math.round(hr / 24)
 	return `${day}d ago`
+}
+
+/**
+ * Parse a chDB UTC datetime string (`'YYYY-MM-DD HH:MM:SS'`, no timezone
+ * marker) to epoch-ms. Returns `null` for empty/invalid input or the zero date
+ * chDB emits for an empty aggregate.
+ */
+export function parseClickHouseDateTime(chDateTime: string | null | undefined): number | null {
+	if (!chDateTime) return null
+	const ms = Date.parse(`${chDateTime.replace(" ", "T")}Z`)
+	if (Number.isNaN(ms) || ms <= 0) return null
+	return ms
+}
+
+/**
+ * Compact relative-time label from a ClickHouse DateTime string. chDB emits UTC
+ * second-precision strings without a timezone marker, so we append `Z` before
+ * parsing.
+ */
+export function formatRelativeTime(chDateTime: string | null | undefined): string {
+	const ms = parseClickHouseDateTime(chDateTime)
+	return ms === null ? "—" : formatRelativeMs(ms)
 }

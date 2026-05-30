@@ -1,7 +1,6 @@
 import type { ReactNode } from "react"
 import { Spinner } from "@maple/ui/components/ui/spinner"
 import { Separator } from "@maple/ui/components/ui/separator"
-import { Skeleton } from "@maple/ui/components/ui/skeleton"
 import {
 	ClockIcon,
 	CircleWarningIcon,
@@ -30,7 +29,7 @@ import {
 } from "../components/filter-sidebar"
 import { PageShell } from "../components/page-shell"
 import { Toolbar, ToolbarSearch, ToolbarStat, TimeRangeSelect } from "../components/toolbar"
-import { ErrorState } from "../components/view-states"
+import { EmptyState, ErrorState, ListSkeleton } from "../components/view-states"
 
 interface SessionsListViewProps {
 	onSelectSession: (sessionId: string) => void
@@ -54,7 +53,7 @@ export function SessionsListView({ onSelectSession }: SessionsListViewProps) {
 
 	const filters = { service, browser, device, errorsOnly, search, range }
 	const facets = useLocalSessionFacets(filters)
-	const { data, isPending, isError, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+	const { data, isPending, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
 		useLocalSessions(filters)
 	const sessions = data?.pages.flat() ?? []
 
@@ -138,43 +137,57 @@ export function SessionsListView({ onSelectSession }: SessionsListViewProps) {
 
 	return (
 		<PageShell sidebar={sidebar} toolbar={toolbar}>
-			<div className="p-4">
-				{isPending ? (
+			{isPending ? (
+				<ListSkeleton variant="card" rows={6} />
+			) : isError ? (
+				<ErrorState label="sessions" error={error} onRetry={() => refetch()} />
+			) : sessions.length === 0 ? (
+				<EmptyState
+					icon={<EyeIcon />}
+					title={hasActiveFilters || search ? "No matching sessions" : "No sessions recorded yet"}
+					hint={
+						hasActiveFilters || search ? (
+							"Try widening the time range or clearing filters."
+						) : (
+							<>
+								Install{" "}
+								<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8em]">
+									@maple-dev/browser
+								</code>{" "}
+								and call{" "}
+								<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8em]">
+									MapleBrowser.init()
+								</code>{" "}
+								to start capturing sessions.
+							</>
+						)
+					}
+				/>
+			) : (
+				<div className="p-4">
 					<div className="space-y-2">
-						{Array.from({ length: 6 }).map((_, i) => (
-							<Skeleton key={i} className="h-[68px] w-full rounded-xl" />
+						{sessions.map((session) => (
+							<SessionCard
+								key={session.sessionId}
+								session={session}
+								onSelect={() => onSelectSession(session.sessionId)}
+							/>
 						))}
 					</div>
-				) : isError ? (
-					<ErrorState label="sessions" error={error} />
-				) : sessions.length === 0 ? (
-					<SessionsEmpty filtered={hasActiveFilters || !!search} />
-				) : (
-					<>
-						<div className="space-y-2">
-							{sessions.map((session) => (
-								<SessionCard
-									key={session.sessionId}
-									session={session}
-									onSelect={() => onSelectSession(session.sessionId)}
-								/>
-							))}
+					{hasNextPage ? (
+						<div className="flex justify-center pt-4">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => fetchNextPage()}
+								disabled={isFetchingNextPage}
+							>
+								{isFetchingNextPage ? <Spinner className="size-4" /> : "Load more"}
+							</Button>
 						</div>
-						{hasNextPage ? (
-							<div className="flex justify-center pt-4">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => fetchNextPage()}
-									disabled={isFetchingNextPage}
-								>
-									{isFetchingNextPage ? <Spinner className="size-4" /> : "Load more"}
-								</Button>
-							</div>
-						) : null}
-					</>
-				)}
-			</div>
+					) : null}
+				</div>
+			)}
 		</PageShell>
 	)
 }
@@ -283,35 +296,5 @@ function PlayGlyph() {
 		<svg viewBox="0 0 24 24" className="size-3.5 translate-x-px fill-current" aria-hidden>
 			<path d="M8 5v14l11-7z" />
 		</svg>
-	)
-}
-
-function SessionsEmpty({ filtered }: { filtered: boolean }) {
-	return (
-		<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border px-6 py-20 text-center">
-			<div className="mb-4 grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
-				<EyeIcon className="size-6" />
-			</div>
-			<p className="text-sm font-medium">
-				{filtered ? "No matching sessions" : "No sessions recorded yet"}
-			</p>
-			<p className="mt-1.5 max-w-md text-sm text-muted-foreground">
-				{filtered ? (
-					"Try widening the time range or clearing filters."
-				) : (
-					<>
-						Install{" "}
-						<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8em]">
-							@maple-dev/browser
-						</code>{" "}
-						and call{" "}
-						<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8em]">
-							MapleBrowser.init()
-						</code>{" "}
-						to start capturing sessions.
-					</>
-				)}
-			</p>
-		</div>
 	)
 }
