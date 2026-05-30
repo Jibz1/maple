@@ -19,7 +19,7 @@ Local mode is the fastest way to look at OpenTelemetry data — point any OTLP e
 curl -fsSL https://maple.dev/cli/install | sh
 ```
 
-The installer detects your OS/arch, downloads the matching bundle from the latest GitHub release, verifies its checksum, installs the two files (`maple` + `libchdb`) into `~/.maple/bin`, clears the macOS Gatekeeper quarantine, and symlinks `maple` onto your `PATH`. macOS (Apple Silicon & Intel) and Linux (x86_64 & arm64) are supported.
+The installer detects your OS/arch, downloads the matching bundle from the latest GitHub release, verifies its checksum, installs the two files (`maple` + `libchdb`) into `~/.maple/bin`, clears the macOS Gatekeeper quarantine, and symlinks `maple` onto your `PATH`. macOS (Apple Silicon) and Linux (x86_64 & arm64) are supported.
 
 > Prefer not to pipe to a shell? The script is [`scripts/install.sh`](https://github.com/Makisuo/maple/blob/main/scripts/install.sh) — read it first, or download a release bundle from [GitHub Releases](https://github.com/Makisuo/maple/releases) by hand. Uninstall with `curl -fsSL https://maple.dev/cli/uninstall | sh` (your `~/.maple/data` is kept).
 
