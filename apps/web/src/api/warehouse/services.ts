@@ -366,6 +366,8 @@ export interface ServiceDetailTimeSeriesPoint {
 	p50LatencyMs: number
 	p95LatencyMs: number
 	p99LatencyMs: number
+	apdexScore: number
+	totalCount: number
 }
 
 export interface ServiceDetailTimeSeriesResponse {

@@ -1,5 +1,6 @@
-import { assert, describe, it } from "@effect/vitest"
+import { describe, it } from "@effect/vitest"
 import { Effect, Exit, Option, Schema } from "effect"
+import { strict as nodeAssert } from "node:assert"
 import { OrgId, UserId } from "@maple/domain"
 import type {
 	QueryEngineEvaluateRequest,
@@ -13,6 +14,12 @@ import {
 	makeQueryEngineExecute,
 } from "./QueryEngineService"
 import type { TenantContext } from "./AuthService"
+
+const assert = Object.assign(nodeAssert, {
+	isTrue: (value: unknown) => nodeAssert.strictEqual(value, true),
+	isDefined: (value: unknown) => nodeAssert.notStrictEqual(value, undefined),
+	include: (actual: string, expected: string) => nodeAssert.ok(actual.includes(expected)),
+})
 
 const asOrgId = Schema.decodeUnknownSync(OrgId)
 const asUserId = Schema.decodeUnknownSync(UserId)
@@ -176,6 +183,68 @@ describe("makeQueryEngineExecute", () => {
 			assert.deepStrictEqual(data[3], {
 				bucket: "2026-01-01T00:15:00.000Z",
 				series: {},
+			})
+		}),
+	)
+
+	it.effect("preserves grouped all-metrics rows in one bucket", () =>
+		Effect.gen(function* () {
+			const execute = makeQueryEngineExecute(
+				makeTinybirdStub({
+					sqlQuery: () =>
+						Effect.succeed([
+							makeTraceTimeseriesRow({
+								groupName: "checkout",
+								count: 3,
+								p95Duration: 25,
+								errorRate: 0.1,
+								apdexScore: 0.95,
+								estimatedSpanCount: 6,
+							}),
+							makeTraceTimeseriesRow({
+								groupName: "payments",
+								count: 7,
+								p95Duration: 50,
+								errorRate: 0.2,
+								apdexScore: 0.9,
+								estimatedSpanCount: 14,
+							}),
+						]),
+				}),
+			)
+
+			const response = yield* execute(tenant, {
+				startTime: "2026-01-01 00:00:00",
+				endTime: "2026-01-01 00:05:00",
+				query: {
+					kind: "timeseries",
+					source: "traces",
+					metric: "count",
+					allMetrics: true,
+					groupBy: ["service"],
+					bucketSeconds: 300,
+				},
+			})
+
+			assert.strictEqual(response.result.kind, "timeseries")
+			const data = timeseriesData(response.result)
+			assert.deepStrictEqual(data[0]?.series, {
+				"count::checkout": 3,
+				"avg_duration::checkout": 0,
+				"p50_duration::checkout": 0,
+				"p95_duration::checkout": 25,
+				"p99_duration::checkout": 0,
+				"error_rate::checkout": 0.1,
+				"apdex::checkout": 0.95,
+				"estimated_span_count::checkout": 6,
+				"count::payments": 7,
+				"avg_duration::payments": 0,
+				"p50_duration::payments": 0,
+				"p95_duration::payments": 50,
+				"p99_duration::payments": 0,
+				"error_rate::payments": 0.2,
+				"apdex::payments": 0.9,
+				"estimated_span_count::payments": 14,
 			})
 		}),
 	)

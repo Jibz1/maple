@@ -501,20 +501,26 @@ function groupAllMetricsTimeSeriesRows<
 	const bucketOrder: string[] = fillOptions
 		? buildBucketTimeline(fillOptions.startMs, fillOptions.endMs, fillOptions.bucketSeconds)
 		: []
+	const isGrouped = rows.some((row) => row.groupName !== "all")
+	const metricKey = (metric: string, groupName: string) =>
+		isGrouped ? `${metric}::${groupName || "all"}` : metric
 
 	for (const row of rows) {
 		const bucket = normalizeBucket(row.bucket)
-		bucketMap.set(bucket, {
-			count: Number(row.count),
-			avg_duration: Number(row.avgDuration),
-			p50_duration: Number(row.p50Duration),
-			p95_duration: Number(row.p95Duration),
-			p99_duration: Number(row.p99Duration),
-			error_rate: Number(row.errorRate),
-			apdex: Number(row.apdexScore),
-			estimated_span_count: Number(row.estimatedSpanCount),
-		})
-		if (!fillOptions) {
+		let series = bucketMap.get(bucket)
+		if (!series) {
+			series = {}
+			bucketMap.set(bucket, series)
+		}
+		series[metricKey("count", row.groupName)] = Number(row.count)
+		series[metricKey("avg_duration", row.groupName)] = Number(row.avgDuration)
+		series[metricKey("p50_duration", row.groupName)] = Number(row.p50Duration)
+		series[metricKey("p95_duration", row.groupName)] = Number(row.p95Duration)
+		series[metricKey("p99_duration", row.groupName)] = Number(row.p99Duration)
+		series[metricKey("error_rate", row.groupName)] = Number(row.errorRate)
+		series[metricKey("apdex", row.groupName)] = Number(row.apdexScore)
+		series[metricKey("estimated_span_count", row.groupName)] = Number(row.estimatedSpanCount)
+		if (!fillOptions && !bucketOrder.includes(bucket)) {
 			bucketOrder.push(bucket)
 		}
 	}
@@ -522,7 +528,7 @@ function groupAllMetricsTimeSeriesRows<
 	if (fillOptions) {
 		for (const bucket of bucketOrder) {
 			if (!bucketMap.has(bucket)) {
-				bucketMap.set(bucket, { ...emptyMetrics })
+				bucketMap.set(bucket, isGrouped ? {} : { ...emptyMetrics })
 			}
 		}
 	}
@@ -927,6 +933,7 @@ export const makeQueryEngineExecute = (warehouse: QueryEngineWarehouse) =>
 						groupBy: request.query.groupBy as string[] | undefined,
 						apdexThresholdMs:
 							request.query.metric === "apdex" ? request.query.apdexThresholdMs : undefined,
+						bucketSeconds: bucketSeconds!,
 					}),
 					{
 						orgId: tenant.orgId,
@@ -956,6 +963,7 @@ export const makeQueryEngineExecute = (warehouse: QueryEngineWarehouse) =>
 					groupBy: request.query.groupBy as string[] | undefined,
 					apdexThresholdMs:
 						request.query.metric === "apdex" ? request.query.apdexThresholdMs : undefined,
+					bucketSeconds: bucketSeconds!,
 				}),
 				{
 					orgId: tenant.orgId,
@@ -1615,6 +1623,7 @@ export const makeQueryEngineEvaluate = (warehouse: QueryEngineWarehouse) =>
 					groupBy: tracesQuery.groupBy as readonly string[] | undefined,
 					apdexThresholdMs:
 						tracesQuery.metric === "apdex" ? tracesQuery.apdexThresholdMs : undefined,
+					bucketSeconds,
 				}),
 				{
 					orgId: tenant.orgId,

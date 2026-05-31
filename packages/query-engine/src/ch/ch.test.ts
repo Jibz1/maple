@@ -312,6 +312,60 @@ describe("tracesTimeseriesQuery", () => {
 		expect(sql).toContain("FROM service_overview_spans")
 	})
 
+	it("routes eligible hourly trace timeseries to traces_aggregates_hourly", () => {
+		const q = tracesTimeseriesQuery({
+			metric: "p95_duration",
+			needsSampling: false,
+			rootOnly: true,
+			groupBy: ["service"],
+			bucketSeconds: 3600,
+		})
+		const { sql } = compileCH(q, baseParams)
+		expect(sql).toContain("FROM traces_aggregates_hourly")
+		expect(sql).toContain("quantilesTDigestWeightedMerge(0.5, 0.95, 0.99)(DurationQuantiles)")
+		expect(sql).toContain("IsEntryPoint = 1")
+		expect(sql).not.toContain("FROM service_overview_spans")
+	})
+
+	it("keeps fine-grained trace timeseries on the existing MV path", () => {
+		const q = tracesTimeseriesQuery({
+			metric: "p95_duration",
+			needsSampling: false,
+			rootOnly: true,
+			bucketSeconds: 300,
+		})
+		const { sql } = compileCH(q, { ...baseParams, bucketSeconds: 300 })
+		expect(sql).toContain("FROM service_overview_spans")
+		expect(sql).not.toContain("FROM traces_aggregates_hourly")
+	})
+
+	it("keeps all-metrics and Apdex timeseries off traces_aggregates_hourly", () => {
+		const allMetrics = compileCH(
+			tracesTimeseriesQuery({
+				metric: "count",
+				needsSampling: true,
+				allMetrics: true,
+				rootOnly: true,
+				bucketSeconds: 3600,
+			}),
+			baseParams,
+		).sql
+		const apdex = compileCH(
+			tracesTimeseriesQuery({
+				metric: "apdex",
+				needsSampling: false,
+				rootOnly: true,
+				bucketSeconds: 3600,
+			}),
+			baseParams,
+		).sql
+
+		expect(allMetrics).toContain("FROM service_overview_spans")
+		expect(allMetrics).not.toContain("FROM traces_aggregates_hourly")
+		expect(apdex).toContain("FROM service_overview_spans")
+		expect(apdex).not.toContain("FROM traces_aggregates_hourly")
+	})
+
 	it("uses pre-extracted CommitSha column when routing to MV", () => {
 		const q = tracesTimeseriesQuery({
 			metric: "count",
