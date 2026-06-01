@@ -750,6 +750,24 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// OTEL span status (`otel.status_code`) for a rejected request, by HTTP status.
+///
+/// Per the OpenTelemetry HTTP semantic conventions, a SERVER span is only an
+/// `Error` for 5xx responses; 4xx client rejections (missing/invalid ingest key,
+/// billing limit, throttle, oversized/undecodable payload) are the caller's fault
+/// and must NOT mark the span `Error` — otherwise they flood the error dashboards
+/// (which count `StatusCode='Error'`). The genuine server-side auth failure
+/// (resolver unavailable → 503) is 5xx and stays `Error`. `http.response.status_code`,
+/// `error.type`, and the `request_completed(… "error" …)` metric are recorded
+/// regardless, so 4xx rejections remain fully observable.
+fn otel_status_for_rejection(status: u16) -> &'static str {
+    if status >= 500 {
+        "Error"
+    } else {
+        "Ok"
+    }
+}
+
 /// Resolve the deployment environment in maple's canonical priority order.
 /// MAPLE_ENVIRONMENT is what apps/api/alchemy.run.ts and friends set via
 /// resolveDeploymentEnvironment(stage); RAILWAY_ENVIRONMENT_NAME is Railway's
@@ -1820,9 +1838,10 @@ async fn handle_signal(
             response
         }
         Err((error, error_kind)) => {
-            span_handle.record("http.response.status_code", error.status.as_u16());
+            let status = error.status.as_u16();
+            span_handle.record("http.response.status_code", status);
             span_handle.record("error.type", error_kind);
-            span_handle.record("otel.status_code", "Error");
+            span_handle.record("otel.status_code", otel_status_for_rejection(status));
             metrics::request_completed(signal.path(), "error", error_kind, duration.as_secs_f64());
             error.into_response()
         }
@@ -1889,9 +1908,10 @@ async fn handle_cloudflare_logpush(
             response
         }
         Err((error, error_kind)) => {
-            span_handle.record("http.response.status_code", error.status.as_u16());
+            let status = error.status.as_u16();
+            span_handle.record("http.response.status_code", status);
             span_handle.record("error.type", error_kind);
-            span_handle.record("otel.status_code", "Error");
+            span_handle.record("otel.status_code", otel_status_for_rejection(status));
             metrics::request_completed("logs", "error", error_kind, duration.as_secs_f64());
             if error_kind == "auth" {
                 metrics::cloudflare_auth_failure("http_requests");
@@ -3701,6 +3721,19 @@ mod tests {
         let hash_a = hash_ingest_key("maple_pk_123", "secret").unwrap();
         let hash_b = hash_ingest_key("maple_pk_123", "secret").unwrap();
         assert_eq!(hash_a, hash_b);
+    }
+
+    #[test]
+    fn rejection_span_status_is_error_only_for_5xx() {
+        // 4xx client rejections must not mark the SERVER span Error.
+        assert_eq!(otel_status_for_rejection(401), "Ok"); // missing/invalid ingest key
+        assert_eq!(otel_status_for_rejection(402), "Ok"); // billing limit
+        assert_eq!(otel_status_for_rejection(413), "Ok"); // payload too large
+        assert_eq!(otel_status_for_rejection(415), "Ok"); // unsupported media type
+        assert_eq!(otel_status_for_rejection(429), "Ok"); // throttle
+        // 5xx server faults stay Error (e.g. auth resolver unavailable → 503).
+        assert_eq!(otel_status_for_rejection(500), "Error");
+        assert_eq!(otel_status_for_rejection(503), "Error");
     }
 
     #[test]

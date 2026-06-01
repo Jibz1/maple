@@ -625,6 +625,50 @@ export const errorEvents = defineDatasource("error_events", {
 export type ErrorEventsRow = InferRow<typeof errorEvents>
 
 /**
+ * Time-ordered sibling of `error_events`, populated by the same materialized view
+ * logic but sorted `(OrgId, Timestamp, FingerprintHash)`.
+ *
+ * `error_events` leads its sort key with `FingerprintHash`, which is optimal for
+ * per-issue occurrence lookups (filter on a specific FingerprintHash) but pessimal
+ * for the recent-window scans that dominate the workload: the errors/triage tick's
+ * `errorIssuesScan` (and the dashboard error queries) filter a `Timestamp` range and
+ * `GROUP BY FingerprintHash`, which can't prune via the primary index on the original
+ * table and ends up scanning the org's whole day-partition — timing out the 30s
+ * warehouse budget for high-volume orgs. This sibling makes the time range the leading
+ * (post-org) sort dimension so those scans prune to the window. Same schema, same 90d
+ * TTL; the only difference is the sorting key.
+ */
+export const errorEventsByTime = defineDatasource("error_events_by_time", {
+	description:
+		"Time-ordered sibling of error_events (sorted by OrgId, Timestamp, FingerprintHash) for recent-window error scans (errorIssuesScan tick + dashboard error queries). Populated by materialized view.",
+	jsonPaths: false,
+	schema: {
+		OrgId: t.string().lowCardinality(),
+		Timestamp: t.dateTime(),
+		TraceId: t.string(),
+		SpanId: t.string(),
+		ParentSpanId: t.string().default("__unset__"),
+		ServiceName: t.string().lowCardinality(),
+		DeploymentEnv: t.string().lowCardinality(),
+		ExceptionType: t.string().lowCardinality(),
+		ExceptionMessage: t.string(),
+		ExceptionStacktrace: t.string(),
+		TopFrame: t.string(),
+		FingerprintHash: t.uint64(),
+		StatusMessage: t.string(),
+		Duration: t.uint64(),
+		ErrorLabel: t.string(),
+	},
+	engine: engine.mergeTree({
+		partitionKey: "toDate(Timestamp)",
+		sortingKey: ["OrgId", "Timestamp", "FingerprintHash"],
+		ttl: "Timestamp + INTERVAL 90 DAY",
+	}),
+})
+
+export type ErrorEventsByTimeRow = InferRow<typeof errorEventsByTime>
+
+/**
  * Pre-materialized root spans for the trace list view.
  * Extracts HTTP attributes and normalizes span names at write time
  * so the trace list query avoids scanning heavy Map columns and GROUP BY.
