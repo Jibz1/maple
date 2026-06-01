@@ -890,6 +890,10 @@ const queryDraftBaseFields = {
 export const TracesQueryDraftSchema = Schema.Struct({
 	...queryDraftBaseFields,
 	dataSource: Schema.Literal("traces"),
+	// A non-empty `valueField` (e.g. "attr.result.rowCount") switches the traces
+	// query into numeric-attribute aggregation mode: `aggregation` becomes a
+	// numeric function over that span attribute instead of a duration-based metric.
+	valueField: Schema.optional(Schema.String),
 })
 
 export const LogsQueryDraftSchema = Schema.Struct({
