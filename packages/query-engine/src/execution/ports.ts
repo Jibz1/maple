@@ -1,6 +1,11 @@
 import type { Effect } from "effect"
 import type { OrgId } from "@maple/domain"
-import type { WarehouseQueryRequest, WarehouseQueryResponse, WarehouseQueryError } from "@maple/domain/http"
+import type {
+	WarehouseQueryRequest,
+	WarehouseQueryResponse,
+	WarehouseQueryError,
+	WarehouseValidationError,
+} from "@maple/domain/http"
 import type { WarehouseExecutorShape } from "../observability"
 import type { QueryProfileName, WarehouseQuerySettings } from "../profiles"
 import type { WarehouseSqlError } from "./errors"
@@ -68,12 +73,12 @@ export interface WarehouseQueryServiceShape {
 		tenant: ExecutionTenant,
 		payload: WarehouseQueryRequest,
 		options?: SqlQueryOptions,
-	) => Effect.Effect<WarehouseQueryResponse, WarehouseSqlError>
+	) => Effect.Effect<WarehouseQueryResponse, WarehouseSqlError | WarehouseValidationError>
 	readonly sqlQuery: (
 		tenant: ExecutionTenant,
 		sql: string,
 		options?: SqlQueryOptions,
-	) => Effect.Effect<ReadonlyArray<Record<string, unknown>>, WarehouseSqlError>
+	) => Effect.Effect<ReadonlyArray<Record<string, unknown>>, WarehouseSqlError | WarehouseValidationError>
 	readonly ingest: <T>(
 		tenant: ExecutionTenant,
 		datasource: string,

@@ -7,8 +7,6 @@ import {
 	QueryEngineValidationError,
 	RawSqlExecuteResponse,
 	RawSqlValidationError,
-	WarehouseQueryError,
-	WarehouseQuotaExceededError,
 	SpanHierarchyResponse,
 	SpanDetailResponse,
 	ErrorsByTypeResponse,
@@ -51,18 +49,18 @@ import {
 import { Effect, Schema } from "effect"
 import { QueryEngineService } from "../services/QueryEngineService"
 import { RawSqlChartService } from "@maple/query-engine/runtime"
-import { WarehouseQueryService, type WarehouseSqlError } from "../lib/WarehouseQueryService"
+import { WarehouseQueryService } from "../lib/WarehouseQueryService"
 import { CH, QueryEngineExecuteRequest } from "@maple/query-engine"
 import { buildBreakdownQuerySpec, buildTimeseriesQuerySpec } from "@maple/query-engine/query-builder"
 
-// `warehouse.sqlQuery` fails with the `WarehouseSqlError` tagged union
-// (`WarehouseQueryError | WarehouseQuotaExceededError`). Both are passed through
-// unchanged so HTTP status mapping stays accurate; this combinator only exists
-// to satisfy the typed error channel without widening to `unknown`.
-const mapExecError = <A, R>(
-	effect: Effect.Effect<A, WarehouseSqlError, R>,
+// `warehouse.sqlQuery` fails with the warehouse error union (distinct tagged
+// classes per failure mode). This identity combinator threads that typed error
+// channel through unchanged so HTTP status mapping stays accurate — every
+// endpoint declares the full set via `warehouseHttpErrors`.
+const mapExecError = <A, E, R>(
+	effect: Effect.Effect<A, E, R>,
 	_context: string,
-): Effect.Effect<A, WarehouseQueryError | WarehouseQuotaExceededError, R> => effect
+): Effect.Effect<A, E, R> => effect
 
 const decodeTraceId = Schema.decodeSync(TraceId)
 const decodeSpanId = Schema.decodeSync(SpanId)

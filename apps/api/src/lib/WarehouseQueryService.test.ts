@@ -1,6 +1,6 @@
 import { afterEach, assert, describe, it } from "@effect/vitest"
 import { Cause, ConfigProvider, Effect, Exit, Layer, Option, Schema } from "effect"
-import { WarehouseQueryError, OrgId, UserId } from "@maple/domain/http"
+import { WarehouseQueryError, WarehouseUpstreamError, OrgId, UserId } from "@maple/domain/http"
 import { __testables, WarehouseQueryService } from "./WarehouseQueryService"
 import { OrgClickHouseSettingsService } from "../services/OrgClickHouseSettingsService"
 import type { TenantContext } from "../services/AuthService"
@@ -149,9 +149,8 @@ describe("WarehouseQueryService.sqlQuery retry on transient upstream failures", 
 			assert.isTrue(Exit.isFailure(exit))
 
 			const failure = getError(exit)
-			assert.instanceOf(failure, WarehouseQueryError)
-			assert.strictEqual((failure as WarehouseQueryError).category, "upstream")
-			assert.strictEqual((failure as WarehouseQueryError).upstreamStatus, 503)
+			assert.instanceOf(failure, WarehouseUpstreamError)
+			assert.strictEqual((failure as WarehouseUpstreamError).upstreamStatus, 503)
 		}).pipe(Effect.provide(layer))
 	})
 })
@@ -225,15 +224,14 @@ describe("WarehouseQueryService.ingest writes through the SQL client", () => {
 	})
 })
 
-describe("WarehouseQueryError category surfaces transient classification", () => {
-	it("emits category=upstream on 503", () => {
+describe("WarehouseUpstreamError surfaces transient classification", () => {
+	it("carries upstreamStatus on 503", () => {
 		// Sanity check that the constructor flow we depend on for retry is intact.
-		const err = new WarehouseQueryError({
+		const err = new WarehouseUpstreamError({
 			pipe: "test",
 			message: "upstream",
-			category: "upstream",
 			upstreamStatus: 503,
 		})
-		assert.strictEqual(err.category, "upstream")
+		assert.strictEqual(err.upstreamStatus, 503)
 	})
 })

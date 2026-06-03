@@ -1,4 +1,5 @@
-import { optionalNumberParam, optionalStringParam, McpQueryError, type McpToolRegistrar } from "./types"
+import { optionalNumberParam, optionalStringParam, type McpToolRegistrar } from "./types"
+import { toMcpQueryError } from "../lib/map-warehouse-error"
 import { resolveTenant } from "../lib/query-warehouse"
 import { resolveTimeRange, formatClampNote } from "../lib/time"
 import { clampLimit, clampOffset } from "../lib/limits"
@@ -63,9 +64,7 @@ export function registerSearchLogsTool(server: McpToolRegistrar) {
 				offset: off,
 			}).pipe(
 				Effect.provide(makeWarehouseExecutorFromTenant(tenant)),
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(new McpQueryError({ message: e.message, pipe: "search_logs", cause: e })),
-				),
+				Effect.mapError(toMcpQueryError("search_logs")),
 			)
 
 			yield* Effect.annotateCurrentSpan({ resultCount: result.logs.length, "result.count": result.logs.length })

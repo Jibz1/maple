@@ -1,7 +1,8 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
+import { WarehouseUpstreamError } from "@maple/domain/http"
 import { findSlowTraces } from "./find-slow-traces"
-import { ObservabilityError, WarehouseExecutor } from "./WarehouseExecutor"
+import { WarehouseExecutor } from "./WarehouseExecutor"
 import type { WarehouseExecutorShape } from "./WarehouseExecutor"
 
 interface CapturedCalls {
@@ -121,16 +122,17 @@ describe("findSlowTraces", () => {
 		}),
 	)
 
-	it.effect("propagates ObservabilityError from the executor", () =>
+	it.effect("propagates warehouse errors from the executor", () =>
 		Effect.gen(function* () {
 			const failingExecutor: WarehouseExecutorShape = {
 				orgId: "org_test",
 				sqlQuery: () => Effect.succeed([]),
 				query: () =>
 					Effect.fail(
-						new ObservabilityError({
+						new WarehouseUpstreamError({
+							pipe: "find_slow_traces",
 							message: "ClickHouse exploded",
-							category: "upstream",
+							upstreamStatus: 503,
 						}),
 					),
 			}
@@ -139,9 +141,8 @@ describe("findSlowTraces", () => {
 				timeRange: { startTime: "2026-04-01 00:00:00", endTime: "2026-04-02 00:00:00" },
 			}).pipe(Effect.provide(makeLayer(failingExecutor)), Effect.flip)
 
-			assert.instanceOf(error, ObservabilityError)
+			assert.instanceOf(error, WarehouseUpstreamError)
 			assert.strictEqual(error.message, "ClickHouse exploded")
-			assert.strictEqual(error.category, "upstream")
 		}),
 	)
 })

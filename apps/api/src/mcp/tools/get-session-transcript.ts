@@ -3,9 +3,9 @@ import {
 	optionalStringParam,
 	optionalNumberParam,
 	optionalBooleanParam,
-	McpQueryError,
 	type McpToolRegistrar,
 } from "./types"
+import { warehouseToMcpHandlers } from "../lib/map-warehouse-error"
 import { withTenantExecutor, resolveTenant } from "../lib/query-warehouse"
 import { truncate } from "../lib/format"
 import { clampLimit, clampOffset } from "../lib/limits"
@@ -85,15 +85,7 @@ export function registerGetSessionTranscriptTool(server: McpToolRegistrar) {
 					offset: off,
 				}),
 			).pipe(
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(
-						new McpQueryError({
-							message: e.message,
-							pipe: e.pipe ?? "get_session_transcript",
-							cause: e,
-						}),
-					),
-				),
+				Effect.catchTags(warehouseToMcpHandlers("get_session_transcript")),
 			))
 
 			const hasMore = rows.length > lim

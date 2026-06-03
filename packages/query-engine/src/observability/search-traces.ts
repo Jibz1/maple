@@ -2,7 +2,12 @@ import { Array as Arr, Effect, Schema, pipe } from "effect"
 import { TraceId, SpanId } from "@maple/domain"
 import type { ListTracesOutput } from "@maple/domain/tinybird"
 import type { SpanSearchOutput } from "../ch"
-import { WarehouseExecutor, ObservabilityError, type WarehouseExecutorShape } from "./WarehouseExecutor"
+import { WarehouseValidationError } from "@maple/domain/http/warehouse-errors"
+import {
+	WarehouseExecutor,
+	type WarehouseExecutorError,
+	type WarehouseExecutorShape,
+} from "./WarehouseExecutor"
 import type { SearchTracesInput, SearchTracesOutput, SpanResult } from "./types"
 import { toSpanResult } from "./row-mappers"
 import { safeUInt } from "./sql-utils"
@@ -41,7 +46,8 @@ export const searchTraces = Effect.fn("Observability.searchTraces")(function* (i
 	// span-level mode rather than silently drop everything past the first one.
 	const rootMode = !(input.spanName && !input.rootOnly)
 	if (rootMode && (input.attributeFilters?.length ?? 0) > 1) {
-		return yield* new ObservabilityError({
+		return yield* new WarehouseValidationError({
+			pipe: "search_traces",
 			message:
 				"Root-level trace search supports at most one attribute filter. Provide spanName for span-level search to use multiple filters.",
 		})
@@ -70,7 +76,7 @@ const spanLevelSearch = (
 	input: SearchTracesInput,
 	limit: number,
 	offset: number,
-): Effect.Effect<ReadonlyArray<SpanResult>, ObservabilityError> => {
+): Effect.Effect<ReadonlyArray<SpanResult>, WarehouseExecutorError> => {
 	const params: Record<string, unknown> = {
 		start_time: input.timeRange.startTime,
 		end_time: input.timeRange.endTime,
@@ -116,7 +122,7 @@ const rootLevelSearch = (
 	input: SearchTracesInput,
 	limit: number,
 	offset: number,
-): Effect.Effect<ReadonlyArray<SpanResult>, ObservabilityError> => {
+): Effect.Effect<ReadonlyArray<SpanResult>, WarehouseExecutorError> => {
 	const optionalParams: Record<string, unknown> = {
 		...(input.service && { service: input.service }),
 		...(input.spanName && { span_name: input.spanName }),

@@ -3,9 +3,9 @@ import {
 	optionalNumberParam,
 	optionalStringParam,
 	validationError,
-	McpQueryError,
 	type McpToolRegistrar,
 } from "./types"
+import { warehouseToMcpHandlers } from "../lib/map-warehouse-error"
 import { withTenantExecutor } from "../lib/query-warehouse"
 import { resolveTimeRange, formatClampNote } from "../lib/time"
 import { clampLimit, clampOffset } from "../lib/limits"
@@ -85,11 +85,7 @@ export function registerSearchTracesTool(server: McpToolRegistrar) {
 					offset: off,
 				}),
 			).pipe(
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(
-						new McpQueryError({ message: e.message, pipe: e.pipe ?? "search_traces", cause: e }),
-					),
-				),
+				Effect.catchTags(warehouseToMcpHandlers("search_traces")),
 			)
 
 			const spans = result.spans

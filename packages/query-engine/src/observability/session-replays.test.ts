@@ -1,7 +1,8 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
+import { WarehouseUpstreamError } from "@maple/domain/http"
 import { getSessionTraces } from "./session-replays"
-import { ObservabilityError, WarehouseExecutor } from "./WarehouseExecutor"
+import { WarehouseExecutor } from "./WarehouseExecutor"
 import type { WarehouseExecutorShape } from "./WarehouseExecutor"
 
 interface Captured {
@@ -92,13 +93,19 @@ describe("getSessionTraces", () => {
 		}),
 	)
 
-	it.effect("propagates ObservabilityError from the executor", () =>
+	it.effect("propagates warehouse errors from the executor", () =>
 		Effect.gen(function* () {
 			const failing: WarehouseExecutorShape = {
 				orgId: "org_test",
 				query: () => Effect.succeed({ data: [] }),
 				sqlQuery: () =>
-					Effect.fail(new ObservabilityError({ message: "ClickHouse exploded", category: "upstream" })),
+					Effect.fail(
+						new WarehouseUpstreamError({
+							pipe: "session_traces",
+							message: "ClickHouse exploded",
+							upstreamStatus: 503,
+						}),
+					),
 			}
 
 			const error = yield* getSessionTraces({ sessionId: "s1" }).pipe(
@@ -106,7 +113,7 @@ describe("getSessionTraces", () => {
 				Effect.flip,
 			)
 
-			assert.instanceOf(error, ObservabilityError)
+			assert.instanceOf(error, WarehouseUpstreamError)
 			assert.strictEqual(error.message, "ClickHouse exploded")
 		}),
 	)

@@ -61,8 +61,7 @@ import {
 	type AlertDestinationId,
 	type AlertIncidentId,
 	QueryEngineExecutionError,
-	WarehouseQueryError,
-	WarehouseQuotaExceededError,
+	type WarehouseError,
 	QueryEngineTimeoutError,
 	QueryEngineValidationError,
 	RoleName,
@@ -942,8 +941,7 @@ export interface AlertsServiceShape {
 		| AlertPersistenceError
 		| AlertNotFoundError
 		| AlertDeliveryError
-		| WarehouseQueryError
-		| WarehouseQuotaExceededError
+		| WarehouseError
 	>
 	readonly listIncidents: (orgId: OrgId) => Effect.Effect<AlertIncidentsListResponse, AlertPersistenceError>
 	readonly listRuleChecks: (
@@ -1277,8 +1275,7 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 				| QueryEngineValidationError
 				| QueryEngineExecutionError
 				| QueryEngineTimeoutError
-				| WarehouseQueryError
-				| WarehouseQuotaExceededError,
+				| WarehouseError,
 				R
 			>,
 		) =>
@@ -1307,8 +1304,7 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 			ReadonlyArray<{ evaluation: EvaluatedRule; groupKey: string }>,
 			| AlertValidationError
 			| AlertDeliveryError
-			| WarehouseQueryError
-			| WarehouseQuotaExceededError
+			| WarehouseError
 		> {
 			const endMs = yield* now
 			const startMs = endMs - rule.windowMinutes * 60_000
@@ -3466,8 +3462,7 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 					| AlertDeliveryError
 					| AlertNotFoundError
 					| AlertPersistenceError
-					| WarehouseQueryError
-					| WarehouseQuotaExceededError,
+					| WarehouseError,
 				failureCategory: string,
 				fields?: {
 					readonly upstreamStatus?: number
@@ -3614,11 +3609,26 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 										quotaSetting: error.setting,
 										pipe: error.pipe,
 									}),
-								"@maple/http/errors/WarehouseQueryError": (error) =>
-									recordEvaluationFailure(row, error, `tinybird_${error.category ?? "query"}`, {
+								"@maple/http/errors/WarehouseUpstreamError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_upstream", {
 										upstreamStatus: error.upstreamStatus,
 										pipe: error.pipe,
 									}),
+								"@maple/http/errors/WarehouseAuthError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_auth", {
+										upstreamStatus: error.upstreamStatus,
+										pipe: error.pipe,
+									}),
+								"@maple/http/errors/WarehouseConfigError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_config", { pipe: error.pipe }),
+								"@maple/http/errors/WarehouseClientError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_client", { pipe: error.pipe }),
+								"@maple/http/errors/WarehouseSchemaDriftError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_schema_drift", { pipe: error.pipe }),
+								"@maple/http/errors/WarehouseValidationError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_validation", { pipe: error.pipe }),
+								"@maple/http/errors/WarehouseQueryError": (error) =>
+									recordEvaluationFailure(row, error, "tinybird_query", { pipe: error.pipe }),
 							}),
 						)
 					}),

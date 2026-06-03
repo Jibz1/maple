@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { SpanId, TraceId } from "../primitives"
 import { QueryEngineExecuteRequest, QueryEngineExecuteResponse, TinybirdDateTime } from "../query-engine"
 import { Authorization } from "./current-tenant"
-import { WarehouseQueryError, WarehouseQuotaExceededError } from "./warehouse"
+import { warehouseHttpErrors } from "./warehouse"
 
 // ---------------------------------------------------------------------------
 // Dedicated endpoint schemas
@@ -1030,21 +1030,22 @@ export class QueryEngineTimeoutError extends Schema.TaggedErrorClass<QueryEngine
 
 // Shared arrays — passing the same reference to every endpoint avoids
 // constructing dozens of identical inline literals at module load (each one
-// drives Effect's HttpApi to build a Schema union internally) and keeps script-
-// startup CPU within Cloudflare Workers' 400ms validation budget (error 10021).
+// drives Effect's HttpApi to build a Schema union internally). This is a perf
+// nicety, not a hard requirement: the script-startup CPU concern (Cloudflare
+// error 10021) is mitigated at the source by `apps/api/src/worker.ts` lazy-
+// importing the route graph, so the Schema ASTs never build during upload
+// validation.
 const queryEngineEndpointErrors = [
 	QueryEngineExecutionError,
 	QueryEngineTimeoutError,
-	WarehouseQueryError,
-	WarehouseQuotaExceededError,
+	...warehouseHttpErrors,
 ] as const
 
 const validatedQueryEndpointErrors = [
 	QueryEngineValidationError,
 	QueryEngineExecutionError,
 	QueryEngineTimeoutError,
-	WarehouseQueryError,
-	WarehouseQuotaExceededError,
+	...warehouseHttpErrors,
 ] as const
 
 export class QueryEngineApiGroup extends HttpApiGroup.make("queryEngine")
@@ -1336,8 +1337,7 @@ export class QueryEngineApiGroup extends HttpApiGroup.make("queryEngine")
 				RawSqlValidationError,
 				QueryEngineExecutionError,
 				QueryEngineTimeoutError,
-				WarehouseQueryError,
-				WarehouseQuotaExceededError,
+				...warehouseHttpErrors,
 			] as const,
 		}),
 	)

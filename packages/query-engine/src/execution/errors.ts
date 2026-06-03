@@ -1,7 +1,27 @@
-import { WarehouseQueryError, WarehouseQuotaExceededError } from "@maple/domain/http"
+import {
+	WarehouseAuthError,
+	WarehouseClientError,
+	WarehouseConfigError,
+	WarehouseQueryError,
+	WarehouseQuotaExceededError,
+	WarehouseSchemaDriftError,
+	WarehouseUpstreamError,
+} from "@maple/domain/http"
 import { detectQuotaSetting } from "../profiles"
 
-export type WarehouseSqlError = WarehouseQueryError | WarehouseQuotaExceededError
+/**
+ * Every warehouse error `mapWarehouseError` can produce. Precondition failures
+ * (`WarehouseValidationError`) are raised by the executor before a query runs,
+ * not by this classifier, so they're intentionally absent here.
+ */
+export type WarehouseSqlError =
+	| WarehouseQueryError
+	| WarehouseUpstreamError
+	| WarehouseAuthError
+	| WarehouseConfigError
+	| WarehouseClientError
+	| WarehouseSchemaDriftError
+	| WarehouseQuotaExceededError
 
 type ClickHouseErrorDetails = {
 	readonly message: string
@@ -11,6 +31,9 @@ type ClickHouseErrorDetails = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null
+
+const optionalString = (value: unknown): string | undefined =>
+	typeof value === "string" ? value : typeof value === "number" ? String(value) : undefined
 
 const unknownToMessage = (error: unknown, fallback = "ClickHouse query failed"): string => {
 	if (typeof error === "string") return error
@@ -22,51 +45,12 @@ const unknownToMessage = (error: unknown, fallback = "ClickHouse query failed"):
 const getClickHouseErrorDetails = (error: unknown): ClickHouseErrorDetails => {
 	const message = unknownToMessage(error)
 	if (!isRecord(error)) return { message }
-	const code =
-		typeof error.code === "string"
-			? error.code
-			: typeof error.code === "number"
-				? String(error.code)
-				: undefined
-	const type = typeof error.type === "string" ? error.type : undefined
-	return { message, code, type }
+	return {
+		message,
+		code: optionalString(error.code),
+		type: typeof error.type === "string" ? error.type : undefined,
+	}
 }
-
-const authClickHouseTypes = new Set([
-	"AUTHENTICATION_FAILED",
-	"ACCESS_DENIED",
-	"USER_DOESNT_EXIST",
-	"REQUIRED_PASSWORD",
-])
-
-const configClickHouseTypes = new Set([
-	"UNKNOWN_DATABASE",
-	"UNKNOWN_TABLE",
-	"TABLE_IS_DROPPED",
-	"UNKNOWN_SETTING",
-])
-
-const transientClickHouseTypes = new Set([
-	"NETWORK_ERROR",
-	"SOCKET_TIMEOUT",
-	"TOO_MANY_SIMULTANEOUS_QUERIES",
-	"SERVER_OVERLOADED",
-	"CANNOT_SCHEDULE_TASK",
-	"KEEPER_EXCEPTION",
-	"ALL_CONNECTION_TRIES_FAILED",
-])
-
-// CH error types raised when a column or function reference doesn't exist in
-// the cluster's schema. For BYO-ClickHouse customers this is almost always
-// schema drift between Maple's expected schema and what the cluster has —
-// resolved by running schema apply, not by retrying. Surfacing it as a
-// distinct category lets the MCP layer return an actionable message.
-const schemaDriftClickHouseTypes = new Set([
-	"UNKNOWN_IDENTIFIER",
-	"NO_SUCH_COLUMN_IN_TABLE",
-	"THERE_IS_NO_COLUMN",
-	"NOT_FOUND_COLUMN_IN_BLOCK",
-])
 
 export const cleanErrorMessage = (raw: string): string => {
 	let cleaned = raw
@@ -88,107 +72,118 @@ const extractUpstreamStatus = (message: string): number | undefined => {
 	return undefined
 }
 
+/** Fields shared by every warehouse error, built once per classification. */
+type ClassifiedBase = {
+	readonly pipe: string
+	readonly message: string
+	readonly cause: unknown
+	readonly clickhouseCode: string | undefined
+	readonly clickhouseType: string | undefined
+}
+
+type ClassificationRule = {
+	readonly status?: (status: number) => boolean
+	readonly types?: ReadonlySet<string>
+	readonly pattern?: RegExp
+	readonly extra?: (error: unknown) => boolean
+	/** Construct the tagged error for this rule. `upstreamStatus` is only used by the rules that carry it. */
+	readonly make: (base: ClassifiedBase, upstreamStatus: number | undefined) => WarehouseSqlError
+}
+
+// Ordered rules — first match wins. A raw error can satisfy several patterns
+// (e.g. a 503 carrying an HTML body, or schema-drift text inside a transient
+// failure), so the order encodes precedence:
+// auth > upstream > config > client > schema_drift > (default) query.
+const CLASSIFICATION_RULES: ReadonlyArray<ClassificationRule> = [
+	{
+		status: (s) => s === 401 || s === 403,
+		types: new Set([
+			"AUTHENTICATION_FAILED",
+			"ACCESS_DENIED",
+			"USER_DOESNT_EXIST",
+			"REQUIRED_PASSWORD",
+		]),
+		pattern: /authentication failed|access denied|not enough privileges|password is incorrect/i,
+		make: (base, upstreamStatus) => new WarehouseAuthError({ ...base, upstreamStatus }),
+	},
+	{
+		status: (s) => s === 408 || s === 429 || (s >= 500 && s < 600),
+		types: new Set([
+			"NETWORK_ERROR",
+			"SOCKET_TIMEOUT",
+			"TOO_MANY_SIMULTANEOUS_QUERIES",
+			"SERVER_OVERLOADED",
+			"CANNOT_SCHEDULE_TASK",
+			"KEEPER_EXCEPTION",
+			"ALL_CONNECTION_TRIES_FAILED",
+		]),
+		// First alternative is anchored (exact "Timeout error"); the rest match anywhere.
+		pattern:
+			/^Timeout error\.?$|The user aborted a request|Failed to fetch|fetch failed|NetworkError|Load failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|certificate/i,
+		make: (base, upstreamStatus) => new WarehouseUpstreamError({ ...base, upstreamStatus }),
+	},
+	{
+		status: (s) => s === 404,
+		types: new Set(["UNKNOWN_DATABASE", "UNKNOWN_TABLE", "TABLE_IS_DROPPED", "UNKNOWN_SETTING"]),
+		pattern:
+			/Invalid URL|unknown database|unknown table|table .* does not exist|database .* does not exist/i,
+		make: (base) => new WarehouseConfigError(base),
+	},
+	{
+		pattern:
+			/Cannot decode .* as JSON|Unexpected token .* JSON|Stream has been already consumed|Failed to parse ClickHouse response/i,
+		extra: (error) => error instanceof SyntaxError,
+		make: (base) => new WarehouseClientError(base),
+	},
+	{
+		// CH error types raised when a column or function reference doesn't exist in
+		// the cluster's schema. For BYO-ClickHouse customers this is almost always
+		// schema drift between Maple's expected schema and what the cluster has —
+		// resolved by running schema apply, not by retrying. Surfacing it as a
+		// distinct error lets the MCP layer return an actionable message.
+		types: new Set([
+			"UNKNOWN_IDENTIFIER",
+			"NO_SUCH_COLUMN_IN_TABLE",
+			"THERE_IS_NO_COLUMN",
+			"NOT_FOUND_COLUMN_IN_BLOCK",
+		]),
+		pattern:
+			/Unknown (?:expression or function )?identifier|Missing columns|There is no column|No such column/i,
+		make: (base) => new WarehouseSchemaDriftError(base),
+	},
+]
+
 export const toWarehouseQueryError = (pipe: string, error: unknown) =>
 	new WarehouseQueryError({
 		message: cleanErrorMessage(unknownToMessage(error, "Warehouse query failed")),
 		pipe,
+		cause: error,
 	})
 
 export const mapWarehouseError = (pipe: string, error: unknown): WarehouseSqlError => {
-	const details = getClickHouseErrorDetails(error)
-	const rawMessage = details.message
+	const { message: rawMessage, code, type } = getClickHouseErrorDetails(error)
 	const message = cleanErrorMessage(rawMessage)
-	const setting = detectQuotaSetting(rawMessage, details.code, details.type)
-	const clickhouseFields = {
-		clickhouseCode: details.code,
-		clickhouseType: details.type,
-	}
-	if (setting) {
-		return new WarehouseQuotaExceededError({ pipe, message, setting, ...clickhouseFields })
-	}
-	const upstreamStatus = extractUpstreamStatus(rawMessage)
-	const type = details.type
-	const isAuthFailure =
-		upstreamStatus === 401 ||
-		upstreamStatus === 403 ||
-		(type !== undefined && authClickHouseTypes.has(type)) ||
-		/authentication failed|access denied|not enough privileges|password is incorrect/i.test(rawMessage)
-	if (isAuthFailure) {
-		return new WarehouseQueryError({
-			pipe,
-			message,
-			category: "auth",
-			upstreamStatus,
-			...clickhouseFields,
-		})
-	}
-	const isTransientFailure =
-		(upstreamStatus !== undefined &&
-			(upstreamStatus === 408 ||
-				upstreamStatus === 429 ||
-				(upstreamStatus >= 500 && upstreamStatus < 600))) ||
-		(type !== undefined && transientClickHouseTypes.has(type)) ||
-		/^Timeout error\.?$/i.test(rawMessage) ||
-		/The user aborted a request|Failed to fetch|fetch failed|NetworkError|Load failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|certificate/i.test(
-			rawMessage,
-		)
-	if (isTransientFailure) {
-		return new WarehouseQueryError({
-			pipe,
-			message,
-			category: "upstream",
-			upstreamStatus,
-			...clickhouseFields,
-		})
-	}
-	const isConfigFailure =
-		(upstreamStatus !== undefined && upstreamStatus === 404) ||
-		(type !== undefined && configClickHouseTypes.has(type)) ||
-		/Invalid URL|unknown database|unknown table|table .* does not exist|database .* does not exist/i.test(
-			rawMessage,
-		)
-	if (isConfigFailure) {
-		return new WarehouseQueryError({
-			pipe,
-			message,
-			category: "config",
-			upstreamStatus,
-			...clickhouseFields,
-		})
-	}
-	const isClientFailure =
-		error instanceof SyntaxError ||
-		/Cannot decode .* as JSON|Unexpected token .* JSON|Stream has been already consumed|Failed to parse ClickHouse response/i.test(
-			rawMessage,
-		)
-	if (isClientFailure) {
-		return new WarehouseQueryError({
-			pipe,
-			message,
-			category: "client",
-			upstreamStatus,
-			...clickhouseFields,
-		})
-	}
-	const isSchemaDrift =
-		(type !== undefined && schemaDriftClickHouseTypes.has(type)) ||
-		/Unknown (?:expression or function )?identifier|Missing columns|There is no column|No such column/i.test(
-			rawMessage,
-		)
-	if (isSchemaDrift) {
-		return new WarehouseQueryError({
-			pipe,
-			message,
-			category: "schema_drift",
-			upstreamStatus,
-			...clickhouseFields,
-		})
-	}
-	return new WarehouseQueryError({
+	const base: ClassifiedBase = {
 		pipe,
 		message,
-		category: "query",
-		upstreamStatus,
-		...clickhouseFields,
-	})
+		cause: error,
+		clickhouseCode: code,
+		clickhouseType: type,
+	}
+
+	const setting = detectQuotaSetting(rawMessage, code, type)
+	if (setting) {
+		return new WarehouseQuotaExceededError({ ...base, setting })
+	}
+
+	const upstreamStatus = extractUpstreamStatus(rawMessage)
+	for (const rule of CLASSIFICATION_RULES) {
+		const matches =
+			(rule.status !== undefined && upstreamStatus !== undefined && rule.status(upstreamStatus)) ||
+			(rule.types !== undefined && type !== undefined && rule.types.has(type)) ||
+			(rule.pattern !== undefined && rule.pattern.test(rawMessage)) ||
+			(rule.extra !== undefined && rule.extra(error))
+		if (matches) return rule.make(base, upstreamStatus)
+	}
+	return new WarehouseQueryError(base)
 }

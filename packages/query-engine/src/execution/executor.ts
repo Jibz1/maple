@@ -1,16 +1,13 @@
-import { Clock, Effect, Schedule } from "effect"
+import { Clock, Effect, Ref, Schedule } from "effect"
 import {
-	WarehouseQueryError,
 	type WarehouseQueryRequest,
 	WarehouseQueryResponse,
+	WarehouseUpstreamError,
+	WarehouseValidationError,
 } from "@maple/domain/http"
 import type { WarehouseQueryName } from "@maple/domain/warehouse-queries"
 import { compilePipeQuery } from "../ch"
-import {
-	ObservabilityError,
-	type ExecutorQueryOptions,
-	type WarehouseExecutorShape,
-} from "../observability"
+import type { ExecutorQueryOptions, WarehouseExecutorShape } from "../observability"
 import { appendSettings, resolveSettings } from "../profiles"
 import { mapWarehouseError, toWarehouseQueryError, type WarehouseSqlError } from "./errors"
 import {
@@ -52,14 +49,7 @@ const TRANSIENT_RETRY_SCHEDULE = Schedule.exponential("100 millis", 2.0).pipe(
 )
 
 const isTransientUpstreamError = (error: WarehouseSqlError): boolean =>
-	error._tag === "@maple/http/errors/WarehouseQueryError" && error.category === "upstream"
-
-const toObservabilityError = (error: WarehouseSqlError, pipe?: string): ObservabilityError =>
-	new ObservabilityError({
-		message: error.message,
-		...(pipe !== undefined ? { pipe } : {}),
-		...("category" in error && error.category !== undefined ? { category: error.category } : {}),
-	})
+	error instanceof WarehouseUpstreamError
 
 /**
  * Build the managed-warehouse executor. Owns SQL execution, retry, error
@@ -102,10 +92,13 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 
 		const leftoverParam = sql.match(/__PARAM_(\w+)__/)
 		if (leftoverParam) {
-			return yield* new WarehouseQueryError({
-				pipe,
-				message: `Compiled SQL contains unresolved param '${leftoverParam[1]}' — query was built with param.${leftoverParam[1]}() but '${leftoverParam[1]}' was not provided in the runtime params object`,
-			})
+			// An unresolved param is a compile-time bug in Maple's query construction,
+			// not a recoverable runtime failure — surface it as a defect.
+			return yield* Effect.die(
+				new Error(
+					`Compiled SQL contains unresolved param '${leftoverParam[1]}' — query was built with param.${leftoverParam[1]}() but '${leftoverParam[1]}' was not provided in the runtime params object`,
+				),
+			)
 		}
 
 		const resolved = yield* deps.resolveConfig(tenant, pipe)
@@ -129,17 +122,13 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 
 		const cacheKey = resolved.source === "managed" ? "__managed__" : tenant.orgId
 		const client = getCachedOrCreateClient(cacheKey, resolved.config, yield* Clock.currentTimeMillis)
-		let retryAttempts = 0
+		const retryAttempts = yield* Ref.make(0)
 		const result = yield* Effect.tryPromise({
 			try: () => client.sql(finalSql),
 			catch: (error) => mapWarehouseError(pipe, error),
 		}).pipe(
 			Effect.tapError((error) =>
-				isTransientUpstreamError(error)
-					? Effect.sync(() => {
-							retryAttempts++
-						})
-					: Effect.void,
+				isTransientUpstreamError(error) ? Ref.update(retryAttempts, (n) => n + 1) : Effect.void,
 			),
 			Effect.retry({
 				schedule: TRANSIENT_RETRY_SCHEDULE,
@@ -148,15 +137,16 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 			Effect.tapError((error) =>
 				Effect.gen(function* () {
 					const elapsedMs = (yield* Clock.currentTimeMillis) - startedAtMs
+					const attempts = yield* Ref.get(retryAttempts)
 					yield* Effect.annotateCurrentSpan("db.duration_ms", elapsedMs)
-					yield* Effect.annotateCurrentSpan("db.retry.attempts", retryAttempts)
+					yield* Effect.annotateCurrentSpan("db.retry.attempts", attempts)
 					yield* Effect.logError("WarehouseQueryService.executeSql failed", {
 						pipe,
 						context: options?.context,
 						orgId: tenant.orgId,
 						backend: resolved.config._tag,
 						durationMs: elapsedMs,
-						retryAttempts,
+						retryAttempts: attempts,
 						error: String(error),
 						message: error.message,
 						sql: truncateSql(finalSql, SQL_LOG_MAX),
@@ -170,7 +160,7 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 
 		yield* Effect.annotateCurrentSpan("result.rowCount", result.data.length)
 		yield* Effect.annotateCurrentSpan("db.duration_ms", (yield* Clock.currentTimeMillis) - startedAtMs)
-		yield* Effect.annotateCurrentSpan("db.retry.attempts", retryAttempts)
+		yield* Effect.annotateCurrentSpan("db.retry.attempts", yield* Ref.get(retryAttempts))
 		return result.data
 	})
 
@@ -183,7 +173,7 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 		yield* Effect.annotateCurrentSpan("orgId", tenant.orgId)
 
 		if (!tenant.orgId || tenant.orgId.trim() === "") {
-			return yield* new WarehouseQueryError({
+			return yield* new WarehouseValidationError({
 				pipe: payload.pipe,
 				message: "org_id must not be empty",
 			})
@@ -195,7 +185,7 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 		})
 
 		if (!compiled) {
-			return yield* new WarehouseQueryError({
+			return yield* new WarehouseValidationError({
 				message: `Unsupported pipe: ${payload.pipe}`,
 				pipe: payload.pipe,
 			})
@@ -214,13 +204,13 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 		options?: SqlQueryOptions,
 	) {
 		if (!tenant.orgId || tenant.orgId.trim() === "") {
-			return yield* new WarehouseQueryError({
+			return yield* new WarehouseValidationError({
 				pipe: "sqlQuery",
 				message: "org_id must not be empty (sqlQuery)",
 			})
 		}
 		if (!sql.includes("OrgId")) {
-			return yield* new WarehouseQueryError({
+			return yield* new WarehouseValidationError({
 				pipe: "sqlQuery",
 				message: "SQL query must contain OrgId filter (sqlQuery)",
 			})
@@ -275,7 +265,6 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 		) =>
 			query(tenant, { pipe, params }, options).pipe(
 				Effect.map((response) => ({ data: response.data as unknown as ReadonlyArray<T> })),
-				Effect.mapError((error) => toObservabilityError(error, pipe)),
 				Effect.withSpan("WarehouseExecutor.query", {
 					attributes: { pipe, orgId: tenant.orgId, "query.profile": options?.profile },
 				}),
@@ -283,7 +272,6 @@ export const makeWarehouseExecutor = (deps: WarehouseExecutorDeps): WarehouseQue
 		sqlQuery: <T>(sql: string, options?: ExecutorQueryOptions) =>
 			sqlQuery(tenant, sql, { ...options, context: "warehouseExecutor.sqlQuery" }).pipe(
 				Effect.map((rows) => rows as unknown as ReadonlyArray<T>),
-				Effect.mapError((error) => toObservabilityError(error)),
 				Effect.withSpan("WarehouseExecutor.sqlQuery", {
 					attributes: { orgId: tenant.orgId, "query.profile": options?.profile },
 				}),

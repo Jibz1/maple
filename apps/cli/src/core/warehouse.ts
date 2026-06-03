@@ -3,8 +3,8 @@ import {
 	WarehouseExecutor,
 	type WarehouseExecutorShape,
 	type ExecutorQueryOptions,
-	ObservabilityError,
 } from "@maple/query-engine/observability"
+import { WarehouseConfigError } from "@maple/domain/http/warehouse-errors"
 import type { WarehouseQueryName } from "@maple/domain/warehouse-queries"
 import { Mode } from "./mode"
 import { makeLocalWarehouseExecutorShape } from "./executor"
@@ -36,7 +36,7 @@ export const WarehouseExecutorFromMode = Layer.effect(
 						? makeLocalWarehouseExecutorShape(m.baseUrl)
 						: makeRemoteWarehouseExecutorShape(m.apiUrl, m.token, m.orgId ?? ""),
 				),
-				Effect.mapError((e) => new ObservabilityError({ message: e.message })),
+				Effect.mapError((e) => new WarehouseConfigError({ message: e.message, pipe: "mode" })),
 			),
 		)
 		return WarehouseExecutor.of({

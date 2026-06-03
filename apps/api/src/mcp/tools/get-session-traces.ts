@@ -1,9 +1,9 @@
 import {
 	requiredStringParam,
 	optionalNumberParam,
-	McpQueryError,
 	type McpToolRegistrar,
 } from "./types"
+import { warehouseToMcpHandlers } from "../lib/map-warehouse-error"
 import { withTenantExecutor, resolveTenant } from "../lib/query-warehouse"
 import { clampLimit } from "../lib/limits"
 import { formatTable, truncate } from "../lib/format"
@@ -33,15 +33,7 @@ export function registerGetSessionTracesTool(server: McpToolRegistrar) {
 			const { session, traces, totalTraceCount } = yield* withTenantExecutor(
 				getSessionTraces({ sessionId: session_id, limit: lim }),
 			).pipe(
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(
-						new McpQueryError({
-							message: e.message,
-							pipe: e.pipe ?? "get_session_traces",
-							cause: e,
-						}),
-					),
-				),
+				Effect.catchTags(warehouseToMcpHandlers("get_session_traces")),
 			)
 
 			if (!session) {

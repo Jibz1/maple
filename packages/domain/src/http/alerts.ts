@@ -11,7 +11,7 @@ import {
 } from "../primitives"
 import { Authorization } from "./current-tenant"
 import { QueryBuilderQueryDraftSchema } from "./query-engine"
-import { WarehouseQueryError, WarehouseQuotaExceededError } from "./warehouse"
+import { warehouseHttpErrors } from "./warehouse"
 
 export const AlertDestinationType = Schema.Literals([
 	"slack",
@@ -724,8 +724,7 @@ export class AlertsApiGroup extends HttpApiGroup.make("alerts")
 				AlertPersistenceError,
 				AlertNotFoundError,
 				AlertDeliveryError,
-				WarehouseQueryError,
-				WarehouseQuotaExceededError,
+				...warehouseHttpErrors,
 			],
 		}),
 	)

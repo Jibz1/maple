@@ -3,10 +3,10 @@ import { compilePipeQuery } from "@maple/query-engine/ch"
 import {
 	WarehouseExecutor,
 	type WarehouseExecutorShape,
-	ObservabilityError,
 	type ExecutorQueryOptions,
 } from "@maple/query-engine/observability"
 import { OrgId } from "@maple/domain/http"
+import { WarehouseQueryError, WarehouseValidationError } from "@maple/domain/http/warehouse-errors"
 import { executeLocalQuery } from "@maple/query-engine/local"
 import { debugLog } from "../lib/debug"
 
@@ -17,10 +17,10 @@ const LOCAL_ORG_ID = Schema.decodeUnknownSync(OrgId)("local")
 
 export const DEFAULT_LOCAL_URL = "http://127.0.0.1:4318"
 
-const toObservabilityError = (pipe: string | undefined) => (error: unknown) =>
-	new ObservabilityError({
+const toWarehouseError = (pipe: string) => (error: unknown) =>
+	new WarehouseQueryError({
 		message: error instanceof Error ? error.message : String(error),
-		...(pipe ? { pipe } : {}),
+		pipe,
 	})
 
 // Cap `db.statement` at 16 KB to match apps/api's WarehouseQueryService span.
@@ -57,7 +57,7 @@ export const makeLocalWarehouseExecutorShape = (baseUrl: string): WarehouseExecu
 				const started = performance.now()
 				const rows = yield* Effect.tryPromise({
 					try: () => exec<T>(sql, "sqlQuery"),
-					catch: toObservabilityError(undefined),
+					catch: toWarehouseError("sqlQuery"),
 				})
 				yield* Effect.annotateCurrentSpan({
 					"db.duration_ms": Math.round(performance.now() - started),
@@ -81,7 +81,7 @@ export const makeLocalWarehouseExecutorShape = (baseUrl: string): WarehouseExecu
 			Effect.gen(function* () {
 				const compiled = compilePipeQuery(pipe, { ...params, org_id: LOCAL_ORG_ID })
 				if (!compiled) {
-					return yield* new ObservabilityError({
+					return yield* new WarehouseValidationError({
 						message: `Unsupported pipe in local mode: ${pipe}`,
 						pipe,
 					})
@@ -93,7 +93,7 @@ export const makeLocalWarehouseExecutorShape = (baseUrl: string): WarehouseExecu
 				const started = performance.now()
 				const rows = yield* Effect.tryPromise({
 					try: () => exec<Record<string, unknown>>(compiled.sql, pipe),
-					catch: toObservabilityError(pipe),
+					catch: toWarehouseError(pipe),
 				})
 				yield* Effect.annotateCurrentSpan({
 					"db.duration_ms": Math.round(performance.now() - started),

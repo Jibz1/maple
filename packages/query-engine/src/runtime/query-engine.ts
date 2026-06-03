@@ -22,8 +22,7 @@ import {
 	QueryEngineExecutionError,
 	QueryEngineTimeoutError,
 	QueryEngineValidationError,
-	WarehouseQueryError,
-	WarehouseQuotaExceededError,
+	type WarehouseError,
 } from "@maple/domain/http"
 import type { OrgId } from "@maple/domain"
 import { Array as Arr, Duration, Effect, Match, Option, Result } from "effect"
@@ -47,10 +46,7 @@ export interface QueryEngineWarehouse<T extends QueryTenant = QueryTenant> {
 		tenant: T,
 		sql: string,
 		options?: { readonly profile?: QueryProfileName; readonly context?: string },
-	) => Effect.Effect<
-		ReadonlyArray<Record<string, unknown>>,
-		WarehouseQueryError | WarehouseQuotaExceededError
-	>
+	) => Effect.Effect<ReadonlyArray<Record<string, unknown>>, WarehouseError>
 }
 
 export interface TimeRangeBounds {
@@ -101,8 +97,7 @@ export interface QueryEngineRawSqlEvaluateRequest {
 export type QueryEngineDirectError =
 	| QueryEngineExecutionError
 	| QueryEngineTimeoutError
-	| WarehouseQueryError
-	| WarehouseQuotaExceededError
+	| WarehouseError
 
 export type QueryEngineRouteError = QueryEngineValidationError | QueryEngineDirectError
 
@@ -618,9 +613,9 @@ export const validateEvaluate = Effect.fn("QueryEngineService.validateEvaluate")
  * don't read like they're remapping errors.
  */
 const annotateWarehouseError = <A, R>(
-	effect: Effect.Effect<A, WarehouseQueryError | WarehouseQuotaExceededError, R>,
+	effect: Effect.Effect<A, WarehouseError, R>,
 	context: string,
-): Effect.Effect<A, WarehouseQueryError | WarehouseQuotaExceededError, R> =>
+): Effect.Effect<A, WarehouseError, R> =>
 	effect.pipe(
 		Effect.tapError((error) =>
 			Effect.annotateCurrentSpan({
@@ -885,8 +880,7 @@ export const makeQueryEngineExecute = <T extends QueryTenant>(warehouse: QueryEn
 		QueryEngineExecuteResponse,
 		| QueryEngineValidationError
 		| QueryEngineExecutionError
-		| WarehouseQueryError
-		| WarehouseQuotaExceededError
+		| WarehouseError
 	> {
 		yield* Effect.annotateCurrentSpan("orgId", tenant.orgId)
 		yield* Effect.annotateCurrentSpan("query.source", request.query.source)
@@ -1696,8 +1690,7 @@ export const makeQueryEngineEvaluate = <T extends QueryTenant>(warehouse: QueryE
 		ReadonlyArray<GroupedAlertObservation>,
 		| QueryEngineValidationError
 		| QueryEngineExecutionError
-		| WarehouseQueryError
-		| WarehouseQuotaExceededError
+		| WarehouseError
 	> {
 		yield* Effect.annotateCurrentSpan("orgId", tenant.orgId)
 		yield* Effect.annotateCurrentSpan("query.source", request.query.source)
@@ -1882,7 +1875,7 @@ export const makeQueryEngineEvaluateRawSql = <T extends QueryTenant>(
 		request: QueryEngineRawSqlEvaluateRequest,
 	): Effect.fn.Return<
 		ReadonlyArray<GroupedAlertObservation>,
-		QueryEngineValidationError | WarehouseQueryError | WarehouseQuotaExceededError
+		QueryEngineValidationError | WarehouseError
 	> {
 		yield* Effect.annotateCurrentSpan("orgId", tenant.orgId)
 		yield* Effect.annotateCurrentSpan("query.reducer", request.reducer)

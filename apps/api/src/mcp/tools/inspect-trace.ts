@@ -1,4 +1,5 @@
-import { requiredStringParam, optionalStringParam, McpQueryError, type McpToolRegistrar } from "./types"
+import { requiredStringParam, optionalStringParam, type McpToolRegistrar } from "./types"
+import { warehouseToMcpHandlers } from "../lib/map-warehouse-error"
 import { withTenantExecutor } from "../lib/query-warehouse"
 import { formatNextSteps } from "../lib/next-steps"
 import { Array as Arr, Effect, Schema, pipe } from "effect"
@@ -40,11 +41,7 @@ export function registerInspectTraceTool(server: McpToolRegistrar) {
 			}
 
 			const result = yield* withTenantExecutor(inspectTrace(trace_id, { timestampHint })).pipe(
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(
-						new McpQueryError({ message: e.message, pipe: e.pipe ?? "span_hierarchy", cause: e }),
-					),
-				),
+				Effect.catchTags(warehouseToMcpHandlers("span_hierarchy")),
 			)
 
 			if (result.spanCount === 0) {

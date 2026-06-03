@@ -1,9 +1,9 @@
 import {
 	optionalNumberParam,
 	optionalStringParam,
-	McpQueryError,
 	type McpToolRegistrar,
 } from "./types"
+import { warehouseToMcpHandlers } from "../lib/map-warehouse-error"
 import { withTenantExecutor, resolveTenant } from "../lib/query-warehouse"
 import { resolveTimeRange, formatClampNote } from "../lib/time"
 import { clampLimit, clampOffset } from "../lib/limits"
@@ -59,11 +59,7 @@ export function registerSearchSessionsTool(server: McpToolRegistrar) {
 					offset: off,
 				}),
 			).pipe(
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(
-						new McpQueryError({ message: e.message, pipe: e.pipe ?? "search_sessions", cause: e }),
-					),
-				),
+				Effect.catchTags(warehouseToMcpHandlers("search_sessions")),
 			)
 
 			yield* Effect.annotateCurrentSpan("resultCount", sessions.length)

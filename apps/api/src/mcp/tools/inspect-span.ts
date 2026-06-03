@@ -1,4 +1,5 @@
-import { requiredStringParam, optionalStringParam, McpQueryError, type McpToolRegistrar } from "./types"
+import { requiredStringParam, optionalStringParam, type McpToolRegistrar } from "./types"
+import { warehouseToMcpHandlers } from "../lib/map-warehouse-error"
 import { withTenantExecutor } from "../lib/query-warehouse"
 import { truncate } from "../lib/format"
 import { formatNextSteps } from "../lib/next-steps"
@@ -35,9 +36,7 @@ export function registerInspectSpanTool(server: McpToolRegistrar) {
 			const result = yield* withTenantExecutor(
 				spanDetail({ traceId: trace_id, spanId: span_id, timestampHint }),
 			).pipe(
-				Effect.catchTag("@maple/query-engine/errors/ObservabilityError", (e) =>
-					Effect.fail(new McpQueryError({ message: e.message, pipe: e.pipe ?? "span_detail", cause: e })),
-				),
+				Effect.catchTags(warehouseToMcpHandlers("span_detail")),
 			)
 
 			if (!result.found) {

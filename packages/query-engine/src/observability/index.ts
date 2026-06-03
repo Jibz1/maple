@@ -1,6 +1,6 @@
 export {
 	WarehouseExecutor,
-	ObservabilityError,
+	type WarehouseExecutorError,
 	type WarehouseExecutorShape,
 	type ExecutorQueryOptions,
 	type ExecutorQuerySettings,
