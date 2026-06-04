@@ -18,7 +18,7 @@ import { isClerkAuthEnabled } from "@/lib/services/common/auth-mode"
 import type { RouterAuthContext } from "@/router"
 import { captureChatReferrer } from "@/components/chat/auto-contexts"
 
-const PUBLIC_PATHS = new Set(["/sign-in", "/sign-up", "/org-required"])
+const PUBLIC_PATHS = new Set(["/sign-in", "/sign-up", "/org-required", "/service-map-bench"])
 
 // Stable references so the AttributesProvider context value never changes
 // identity across renders (avoids re-rendering every CopyableValue consumer).

@@ -13,6 +13,7 @@ import { Route as WidgetLabRouteImport } from './routes/widget-lab'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ServiceMapBenchRouteImport } from './routes/service-map-bench'
 import { Route as ServiceMapRouteImport } from './routes/service-map'
 import { Route as SelectPlanRouteImport } from './routes/select-plan'
 import { Route as QuickStartRouteImport } from './routes/quick-start'
@@ -72,6 +73,11 @@ const SignInRoute = SignInRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServiceMapBenchRoute = ServiceMapBenchRouteImport.update({
+  id: '/service-map-bench',
+  path: '/service-map-bench',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServiceMapRoute = ServiceMapRouteImport.update({
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/quick-start': typeof QuickStartRoute
   '/select-plan': typeof SelectPlanRoute
   '/service-map': typeof ServiceMapRoute
+  '/service-map-bench': typeof ServiceMapBenchRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
@@ -341,6 +348,7 @@ export interface FileRoutesByTo {
   '/quick-start': typeof QuickStartRoute
   '/select-plan': typeof SelectPlanRoute
   '/service-map': typeof ServiceMapRoute
+  '/service-map-bench': typeof ServiceMapBenchRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
@@ -388,6 +396,7 @@ export interface FileRoutesById {
   '/quick-start': typeof QuickStartRoute
   '/select-plan': typeof SelectPlanRoute
   '/service-map': typeof ServiceMapRoute
+  '/service-map-bench': typeof ServiceMapBenchRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
@@ -436,6 +445,7 @@ export interface FileRouteTypes {
     | '/quick-start'
     | '/select-plan'
     | '/service-map'
+    | '/service-map-bench'
     | '/settings'
     | '/sign-in'
     | '/sign-up'
@@ -482,6 +492,7 @@ export interface FileRouteTypes {
     | '/quick-start'
     | '/select-plan'
     | '/service-map'
+    | '/service-map-bench'
     | '/settings'
     | '/sign-in'
     | '/sign-up'
@@ -528,6 +539,7 @@ export interface FileRouteTypes {
     | '/quick-start'
     | '/select-plan'
     | '/service-map'
+    | '/service-map-bench'
     | '/settings'
     | '/sign-in'
     | '/sign-up'
@@ -575,6 +587,7 @@ export interface RootRouteChildren {
   QuickStartRoute: typeof QuickStartRoute
   SelectPlanRoute: typeof SelectPlanRoute
   ServiceMapRoute: typeof ServiceMapRoute
+  ServiceMapBenchRoute: typeof ServiceMapBenchRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
@@ -638,6 +651,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service-map-bench': {
+      id: '/service-map-bench'
+      path: '/service-map-bench'
+      fullPath: '/service-map-bench'
+      preLoaderRoute: typeof ServiceMapBenchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/service-map': {
@@ -935,6 +955,7 @@ const rootRouteChildren: RootRouteChildren = {
   QuickStartRoute: QuickStartRoute,
   SelectPlanRoute: SelectPlanRoute,
   ServiceMapRoute: ServiceMapRoute,
+  ServiceMapBenchRoute: ServiceMapBenchRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,

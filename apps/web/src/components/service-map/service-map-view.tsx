@@ -57,13 +57,20 @@ import type { ServiceWorkload } from "@/api/warehouse/service-infra"
 import { useInfraEnabled } from "@/hooks/use-infra-enabled"
 import { ServiceMapNode } from "./service-map-node"
 import { ServiceMapEdge } from "./service-map-edge"
+import {
+	createParticleRegistry,
+	ParticleRegistryProvider,
+	ServiceMapParticleCanvas,
+	type ParticleRegistry,
+} from "./service-map-particles"
 import { getDbDescriptor } from "./service-map-db"
 import {
 	buildFlowElements,
+	computeNodePositions,
 	DB_NODE_PREFIX,
 	getPlatformColor,
 	getServiceMapNodeColor,
-	layoutNodes,
+	topologyKey,
 	DEFAULT_LAYOUT_CONFIG,
 	type LayoutConfig,
 	type ServiceMapColorMode,
@@ -1051,7 +1058,7 @@ function LayoutDebugPanel({
 	)
 }
 
-function ServiceMapCanvas({
+export function ServiceMapCanvas({
 	edges: serviceEdges,
 	dbEdges,
 	platforms,
@@ -1062,6 +1069,7 @@ function ServiceMapCanvas({
 	durationSeconds,
 	startTime,
 	endTime,
+	layoutKey,
 }: {
 	edges: ServiceEdge[]
 	dbEdges: ServiceDbEdge[]
@@ -1073,16 +1081,26 @@ function ServiceMapCanvas({
 	durationSeconds: number
 	startTime: string
 	endTime: string
+	// Namespaces persisted drag positions / viewport. Lifted to a prop so the
+	// component renders without a Clerk session (e.g. the /service-map-bench
+	// perf harness, which runs in self-hosted mode with no ClerkProvider).
+	layoutKey: string
 }) {
 	const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
 	const [layoutConfig, setLayoutConfig] = useState<LayoutConfig>({ ...DEFAULT_LAYOUT_CONFIG })
 	const [colorMode, setColorMode] = useState<ServiceMapColorMode>("service")
 
-	const { orgId } = useAuth()
-	const [layout, setLayout] = useAtom(serviceMapLayoutAtomFamily(orgId ?? "default"))
+	const [layout, setLayout] = useAtom(serviceMapLayoutAtomFamily(layoutKey))
 
-	const { layoutedNodes, flowEdges, services } = useMemo(() => {
-		const { nodes: rawNodes, edges: rawEdges } = buildFlowElements({
+	// Stable registry that edges publish their geometry into and the single
+	// particle canvas reads each frame. Created once per canvas instance.
+	const registryRef = useRef<ParticleRegistry | null>(null)
+	if (registryRef.current === null) registryRef.current = createParticleRegistry()
+	const registry = registryRef.current
+
+	// Build nodes/edges (carrying live metrics) every render — cheap object work.
+	const { rawNodes, flowEdges, services } = useMemo(() => {
+		const { nodes, edges } = buildFlowElements({
 			edges: serviceEdges,
 			dbEdges,
 			serviceOverviews: overviews,
@@ -1091,13 +1109,29 @@ function ServiceMapCanvas({
 			platforms,
 			runtimes,
 		})
-		const positioned = layoutNodes(rawNodes, rawEdges, layoutConfig)
 		// Service legend should only include real services, not synthetic db: nodes
 		const allServices = Array.from(
-			new Set(positioned.filter((n) => !n.id.startsWith(DB_NODE_PREFIX)).map((n) => n.id)),
+			new Set(nodes.filter((n) => !n.id.startsWith(DB_NODE_PREFIX)).map((n) => n.id)),
 		).toSorted()
-		return { layoutedNodes: positioned, flowEdges: rawEdges, services: allServices }
-	}, [serviceEdges, dbEdges, platforms, runtimes, overviews, workloads, durationSeconds, layoutConfig])
+		return { rawNodes: nodes, flowEdges: edges, services: allServices }
+	}, [serviceEdges, dbEdges, platforms, runtimes, overviews, workloads, durationSeconds])
+
+	// Positions depend ONLY on topology + layout config. Memoize the expensive
+	// hierarchical layout on a topology key so metric refreshes (new array
+	// identities, same shape) don't re-run barycenter sweeps. The memo body runs
+	// each render but short-circuits on an unchanged key.
+	const topoKey = useMemo(() => topologyKey(rawNodes, flowEdges), [rawNodes, flowEdges])
+	const layoutCacheRef = useRef<{ key: string; positions: Map<string, { x: number; y: number }> } | null>(
+		null,
+	)
+	const layoutedNodes = useMemo(() => {
+		const key = `${topoKey}|${JSON.stringify(layoutConfig)}`
+		if (layoutCacheRef.current?.key !== key) {
+			layoutCacheRef.current = { key, positions: computeNodePositions(rawNodes, flowEdges, layoutConfig) }
+		}
+		const positions = layoutCacheRef.current.positions
+		return rawNodes.map((node) => ({ ...node, position: positions.get(node.id) ?? node.position }))
+	}, [rawNodes, flowEdges, layoutConfig, topoKey])
 
 	// Merge layout positions with selection + color-mode state. Persisted drag
 	// positions (keyed by node id) override the deterministic auto-layout.
@@ -1236,28 +1270,30 @@ function ServiceMapCanvas({
 									</SelectContent>
 								</Select>
 							</div>
-							<ReactFlow
-								nodes={nodes}
-								edges={flowEdges}
-								onNodesChange={onNodesChange}
-								onNodeClick={handleNodeClick}
-								onPaneClick={handlePaneClick}
-								onMoveEnd={onMoveEnd}
-								defaultViewport={layout.viewport ?? undefined}
-								onInit={(instance) => {
-									rfInstance.current = instance as unknown as ReactFlowInstance
-								}}
-								nodeTypes={nodeTypes}
-								edgeTypes={edgeTypes}
-								nodesDraggable
-								nodesConnectable={false}
-								connectOnClick={false}
-								elementsSelectable={false}
-								minZoom={0.1}
-								maxZoom={2}
-								proOptions={{ hideAttribution: true }}
-							>
-								<Controls showInteractive={false} />
+							<ParticleRegistryProvider value={registry}>
+								<ReactFlow
+									nodes={nodes}
+									edges={flowEdges}
+									onNodesChange={onNodesChange}
+									onNodeClick={handleNodeClick}
+									onPaneClick={handlePaneClick}
+									onMoveEnd={onMoveEnd}
+									defaultViewport={layout.viewport ?? undefined}
+									onInit={(instance) => {
+										rfInstance.current = instance as unknown as ReactFlowInstance
+									}}
+									nodeTypes={nodeTypes}
+									edgeTypes={edgeTypes}
+									nodesDraggable
+									nodesConnectable={false}
+									connectOnClick={false}
+									elementsSelectable={false}
+									minZoom={0.1}
+									maxZoom={2}
+									proOptions={{ hideAttribution: true }}
+								>
+									<ServiceMapParticleCanvas />
+									<Controls showInteractive={false} />
 								<MiniMap
 									nodeColor={(node: Node) => {
 										const data = node.data as ServiceNodeData
@@ -1272,6 +1308,7 @@ function ServiceMapCanvas({
 								/>
 								<Background variant={BackgroundVariant.Dots} gap={16} size={1} />
 							</ReactFlow>
+							</ParticleRegistryProvider>
 						</div>
 
 						{/* Legend */}
@@ -1414,6 +1451,7 @@ function ServiceMapCanvas({
 }
 
 export function ServiceMapView({ startTime, endTime }: ServiceMapViewProps) {
+	const { orgId } = useAuth()
 	const infraEnabled = useInfraEnabled()
 	const durationSeconds = useMemo(() => {
 		const ms = new Date(endTime).getTime() - new Date(startTime).getTime()
@@ -1508,6 +1546,7 @@ export function ServiceMapView({ startTime, endTime }: ServiceMapViewProps) {
 				durationSeconds={durationSeconds}
 				startTime={startTime}
 				endTime={endTime}
+				layoutKey={orgId ?? "default"}
 			/>
 		))
 		.render()

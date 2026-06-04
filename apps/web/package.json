@@ -2,13 +2,17 @@
 	"name": "@maple/web",
 	"private": true,
 	"type": "module",
-	"portless": { "name": "web", "script": "dev:app" },
+	"portless": {
+		"name": "web",
+		"script": "dev:app"
+	},
 	"scripts": {
 		"dev": "portless",
 		"dev:app": "vite dev --port ${PORT:-3471} --host ${HOST:-127.0.0.1}",
 		"build": "vite build",
 		"preview": "vite preview",
 		"test": "vitest run --passWithNoTests",
+		"test:perf": "playwright test",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
@@ -67,6 +71,7 @@
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "^1.31.0",
 		"@effect/language-service": "catalog:effect",
+		"@playwright/test": "^1.60.0",
 		"@tanstack/devtools-vite": "^0.6.0",
 		"@tanstack/router-plugin": "^1.168.14",
 		"@testing-library/dom": "^10.4.1",
