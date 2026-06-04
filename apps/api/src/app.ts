@@ -21,6 +21,7 @@ import { OAuthDiscoveryRouter } from "./routes/oauth-discovery.http"
 import { HttpOrgOpenRouterSettingsLive } from "./routes/org-openrouter-settings.http"
 import { HttpOrgClickHouseSettingsLive } from "./routes/org-clickhouse-settings.http"
 import { HttpOrganizationsLive } from "./routes/organizations.http"
+import { PrometheusScrapeProxyRouter } from "./routes/prometheus-scrape-proxy.http"
 import { HttpQueryEngineLive } from "./routes/query-engine.http"
 import { HttpRecommendationIssuesLive } from "./routes/recommendation-issues.http"
 import { HttpScrapeTargetsLive } from "./routes/scrape-targets.http"
@@ -182,6 +183,7 @@ export const AllRoutes = Layer.mergeAll(
 	AutumnRouter,
 	IntegrationsCallbackRouter,
 	OAuthDiscoveryRouter,
+	PrometheusScrapeProxyRouter,
 	McpLive,
 	HealthRouter,
 	McpGetFallback,
