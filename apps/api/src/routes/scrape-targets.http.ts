@@ -10,6 +10,7 @@ import { CH } from "@maple/query-engine"
 import { Clock, Effect, Schema } from "effect"
 import { ScrapeTargetsService } from "../services/ScrapeTargetsService"
 import { WarehouseQueryService } from "../lib/WarehouseQueryService"
+import { normalizeTime } from "../mcp/lib/time"
 
 const decodeIsoDateTimeStringSync = Schema.decodeUnknownSync(IsoDateTimeString)
 
@@ -74,8 +75,8 @@ export const HttpScrapeTargetsLive = HttpApiBuilder.group(MapleApi, "scrapeTarge
 					const compiled = CH.compile(CH.scrapeTargetChecksQuery({ limit }), {
 						orgId: tenant.orgId,
 						targetId: params.targetId,
-						startTime: since,
-						endTime: until,
+						startTime: normalizeTime(since),
+						endTime: normalizeTime(until),
 					})
 					const rows = yield* warehouse.compiledQuery(tenant, compiled, {
 						profile: "list",
