@@ -1,5 +1,6 @@
 import { ClerkProvider, useAuth } from "@clerk/clerk-react"
 import { AutumnProvider } from "autumn-js/react"
+import { ThemeProvider } from "next-themes"
 import { Component, StrictMode, useCallback, useEffect, useRef, useState } from "react"
 import ReactDOM from "react-dom/client"
 import { EffectRouterProvider } from "@effect-router/core/react"
@@ -254,4 +255,16 @@ const app = isClerkAuthEnabled ? (
 	<SelfHostedInnerApp />
 )
 
-ReactDOM.createRoot(root).render(<StrictMode>{app}</StrictMode>)
+ReactDOM.createRoot(root).render(
+	<StrictMode>
+		<ThemeProvider
+			attribute="class"
+			defaultTheme="dark"
+			enableSystem={false}
+			storageKey="maple-theme"
+			disableTransitionOnChange
+		>
+			{app}
+		</ThemeProvider>
+	</StrictMode>,
+)

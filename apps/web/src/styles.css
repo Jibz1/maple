@@ -15,13 +15,17 @@
 	--card-foreground: oklch(0.141 0.005 285.823);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.141 0.005 285.823);
-	--primary: oklch(0.59 0.14 242);
-	--primary-foreground: oklch(0.98 0.01 237);
+	/* Maple's brand is the warm amber (hue ~59) used across the dark theme, not
+	   the stale shadcn blue these light tokens shipped with. Mirror the dark
+	   theme's amber-with-dark-text relationship, tuned a touch deeper so it
+	   reads on a white canvas. */
+	--primary: oklch(0.66 0.16 59);
+	--primary-foreground: oklch(0.21 0.008 67);
 	--secondary: oklch(0.967 0.001 286.375);
 	--secondary-foreground: oklch(0.21 0.006 285.885);
 	--muted: oklch(0.967 0.001 286.375);
 	--muted-foreground: oklch(0.552 0.016 285.938);
-	--accent: oklch(0.96 0.02 242);
+	--accent: oklch(0.955 0.025 75);
 	--accent-foreground: oklch(0.21 0.006 285.885);
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.92 0.004 286.32);
@@ -41,9 +45,9 @@
 	--radius: 8px;
 	--sidebar: oklch(0.985 0 0);
 	--sidebar-foreground: oklch(0.141 0.005 285.823);
-	--sidebar-primary: oklch(0.59 0.14 242);
-	--sidebar-primary-foreground: oklch(0.98 0.01 237);
-	--sidebar-accent: oklch(0.96 0.02 242);
+	--sidebar-primary: oklch(0.66 0.16 59);
+	--sidebar-primary-foreground: oklch(0.21 0.008 67);
+	--sidebar-accent: oklch(0.955 0.025 75);
 	--sidebar-accent-foreground: oklch(0.141 0.005 285.823);
 	--sidebar-border: oklch(0.92 0.004 286.32);
 	--sidebar-ring: oklch(0.705 0.015 286.067);

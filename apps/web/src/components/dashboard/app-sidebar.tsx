@@ -22,6 +22,7 @@ import {
 	GridSquareCirclePlusIcon,
 } from "@/components/icons"
 import { OrgSwitcher } from "@/components/dashboard/org-switcher"
+import { ThemeToggle } from "@/components/dashboard/theme-toggle"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -195,6 +196,10 @@ function UserMenu() {
 				</DropdownMenuGroup>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
+					<ThemeToggle />
+				</DropdownMenuGroup>
+				<DropdownMenuSeparator />
+				<DropdownMenuGroup>
 					<DropdownMenuItem render={<Link to="/settings" />}>
 						<GearIcon size={16} />
 						Settings
@@ -235,6 +240,10 @@ function GuestMenu() {
 				<ChevronUpIcon size={16} className="ml-auto" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent side="top" align="start" sideOffset={4} className="min-w-56">
+				<DropdownMenuGroup>
+					<ThemeToggle />
+				</DropdownMenuGroup>
+				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
 					<DropdownMenuItem render={<Link to="/settings" />}>
 						<GearIcon size={16} />
