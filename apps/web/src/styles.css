@@ -51,6 +51,10 @@
 	--sidebar-accent-foreground: oklch(0.141 0.005 285.823);
 	--sidebar-border: oklch(0.92 0.004 286.32);
 	--sidebar-ring: oklch(0.705 0.015 286.067);
+	/* Service-map edge "tube" hollow-interior core. Matches the canvas
+	   background so tubes read as hollow pipes in either theme (light here,
+	   the dark-canvas value lives in .dark). */
+	--service-map-edge-core: oklch(1 0 0);
 	--border-hairline: 1px;
 	--severity-trace: oklch(0.552 0.016 285.938); /* zinc-500 */
 	--severity-debug: oklch(0.623 0.214 259.815); /* blue-500 */
@@ -136,6 +140,9 @@
 	--sidebar-accent-foreground: oklch(0.91 0.016 74);
 	--sidebar-border: oklch(0.268 0.012 67);
 	--sidebar-ring: oklch(0.58 0.02 65);
+	/* Preserves the original dark-canvas core (slightly darker than --background
+	   for a recessed "depth" groove). */
+	--service-map-edge-core: oklch(0.141 0.005 285.823);
 	--severity-trace: oklch(0.603 0.023 72); /* warm gray #8A7F72 */
 	--severity-debug: oklch(0.693 0.165 254); /* blue #4A9EFF */
 	--severity-info: oklch(0.658 0.134 151); /* green #4AA865 */
