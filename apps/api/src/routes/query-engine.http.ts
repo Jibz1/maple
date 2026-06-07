@@ -47,7 +47,7 @@ import {
 	TraceId,
 	SpanId,
 } from "@maple/domain/http"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Match, Option, Schema } from "effect"
 import { QueryEngineService } from "../services/QueryEngineService"
 import { RawSqlChartService } from "@maple/query-engine/runtime"
 import { WarehouseQueryService } from "../lib/WarehouseQueryService"
@@ -323,6 +323,7 @@ export const HttpQueryEngineLive = HttpApiBuilder.group(MapleApi, "queryEngine",
 					const compiled = CH.compile(
 						CH.serviceOverviewQuery({
 							environments: payload.environments,
+							namespaces: payload.namespaces,
 							commitShas: payload.commitShas,
 						}),
 						{ orgId: tenant.orgId, startTime: payload.startTime, endTime: payload.endTime },
@@ -728,9 +729,17 @@ export const HttpQueryEngineLive = HttpApiBuilder.group(MapleApi, "queryEngine",
 							cursor: payload.cursor,
 							search: payload.search,
 							environments: payload.deploymentEnv ? [payload.deploymentEnv] : undefined,
-							matchModes: payload.deploymentEnvMatchMode
-								? { deploymentEnv: payload.deploymentEnvMatchMode }
-								: undefined,
+							namespaces: payload.namespace ? [payload.namespace] : undefined,
+							matchModes: Match.value([
+								payload.deploymentEnvMatchMode,
+								payload.namespaceMatchMode,
+							] as const).pipe(
+								Match.when([undefined, undefined], () => undefined),
+								Match.orElse(([deploymentEnv, serviceNamespace]) => ({
+									deploymentEnv,
+									serviceNamespace,
+								})),
+							),
 							limit: payload.limit,
 						}),
 						{ orgId: tenant.orgId, startTime: payload.startTime, endTime: payload.endTime },

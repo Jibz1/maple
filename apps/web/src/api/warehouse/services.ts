@@ -30,6 +30,7 @@ export interface CommitBreakdown {
 
 export interface ServiceOverview {
 	serviceName: string
+	serviceNamespace: string
 	environment: string
 	commits: CommitBreakdown[]
 	p50LatencyMs: number
@@ -50,6 +51,7 @@ const GetServiceOverviewInput = Schema.Struct({
 	startTime: Schema.optional(dateTimeString),
 	endTime: Schema.optional(dateTimeString),
 	environments: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
+	namespaces: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 	commitShas: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 })
 
@@ -57,6 +59,7 @@ export type GetServiceOverviewInput = Schema.Schema.Type<typeof GetServiceOvervi
 
 interface CoercedRow {
 	serviceName: string
+	serviceNamespace: string
 	environment: string
 	commitSha: string
 	spanCount: number
@@ -71,6 +74,7 @@ interface CoercedRow {
 function coerceRow(raw: Record<string, unknown>): CoercedRow {
 	return {
 		serviceName: String(raw.serviceName ?? ""),
+		serviceNamespace: String(raw.serviceNamespace ?? ""),
 		environment: String(raw.environment ?? "unknown"),
 		commitSha: String(raw.commitSha ?? "N/A"),
 		spanCount: Number(raw.spanCount ?? 0),
@@ -91,7 +95,7 @@ function aggregateByServiceEnvironment(
 	const groups = new Map<string, CoercedRow[]>()
 
 	for (const row of rows) {
-		const key = `${row.serviceName}::${row.environment}`
+		const key = `${row.serviceName}::${row.serviceNamespace}::${row.environment}`
 		const group = groups.get(key)
 		if (group) {
 			group.push(row)
@@ -138,6 +142,7 @@ function aggregateByServiceEnvironment(
 
 		results.push({
 			serviceName: group[0].serviceName,
+			serviceNamespace: group[0].serviceNamespace,
 			environment: group[0].environment,
 			commits,
 			p50LatencyMs: p50,
@@ -182,6 +187,7 @@ const getServiceOverviewEffect = Effect.fn("QueryEngine.getServiceOverview")(fun
 							startTime,
 							endTime,
 							environments: input.environments,
+							namespaces: input.namespaces,
 							commitShas: input.commitShas,
 						}),
 					})
@@ -278,6 +284,7 @@ export interface FacetItem {
 
 export interface ServicesFacets {
 	environments: FacetItem[]
+	namespaces: FacetItem[]
 	commitShas: FacetItem[]
 	services: FacetItem[]
 }
@@ -321,6 +328,7 @@ const getServicesFacetsEffect = Effect.fn("QueryEngine.getServicesFacets")(funct
 
 	const facetsData = extractFacets(response)
 	const environments: FacetItem[] = []
+	const namespaces: FacetItem[] = []
 	const commitShas: FacetItem[] = []
 	const services: FacetItem[] = []
 
@@ -329,6 +337,9 @@ const getServicesFacetsEffect = Effect.fn("QueryEngine.getServicesFacets")(funct
 		switch (row.facetType) {
 			case "environment":
 				environments.push(item)
+				break
+			case "namespace":
+				namespaces.push(item)
 				break
 			case "commitSha":
 			case "commit_sha":
@@ -341,7 +352,7 @@ const getServicesFacetsEffect = Effect.fn("QueryEngine.getServicesFacets")(funct
 	}
 
 	return {
-		data: { environments, commitShas, services },
+		data: { environments, namespaces, commitShas, services },
 	}
 })
 

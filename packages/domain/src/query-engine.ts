@@ -38,6 +38,7 @@ export const TracesMatchModes = Schema.Struct({
 	serviceName: Schema.optional(Schema.Literals(["contains"])),
 	spanName: Schema.optional(Schema.Literals(["contains"])),
 	deploymentEnv: Schema.optional(Schema.Literals(["contains"])),
+	serviceNamespace: Schema.optional(Schema.Literals(["contains"])),
 })
 export type TracesMatchModes = Schema.Schema.Type<typeof TracesMatchModes>
 
@@ -46,6 +47,7 @@ export const TracesFilters = Schema.Struct({
 	spanName: Schema.optional(Schema.String),
 	rootSpansOnly: Schema.optional(Schema.Boolean),
 	environments: Schema.optional(Schema.Array(Schema.String)),
+	namespaces: Schema.optional(Schema.Array(Schema.String)),
 	commitShas: Schema.optional(Schema.Array(Schema.String)),
 	groupByAttributeKeys: Schema.optional(Schema.Array(Schema.String)),
 	errorsOnly: Schema.optional(Schema.Boolean),
@@ -57,6 +59,7 @@ export const TracesFilters = Schema.Struct({
 	excludedServiceNames: Schema.optional(Schema.Array(Schema.String)),
 	excludedSpanNames: Schema.optional(Schema.Array(Schema.String)),
 	excludedEnvironments: Schema.optional(Schema.Array(Schema.String)),
+	excludedNamespaces: Schema.optional(Schema.Array(Schema.String)),
 })
 export type TracesFilters = Schema.Schema.Type<typeof TracesFilters>
 
@@ -67,6 +70,8 @@ export const LogsFilters = Schema.Struct({
 	search: Schema.optional(Schema.String),
 	environments: Schema.optional(Schema.Array(Schema.String)),
 	deploymentEnvMatchMode: Schema.optional(Schema.Literal("contains")),
+	namespaces: Schema.optional(Schema.Array(Schema.String)),
+	namespaceMatchMode: Schema.optional(Schema.Literal("contains")),
 })
 export type LogsFilters = Schema.Schema.Type<typeof LogsFilters>
 

@@ -599,12 +599,21 @@ export const serviceOverviewSpans = defineDatasource("service_overview_spans", {
 		DeploymentEnv: t.string().lowCardinality(),
 		CommitSha: t.string().lowCardinality(),
 		SampleRate: t.float64().default(1.0),
+		ServiceNamespace: t.string().lowCardinality(),
 	},
 	engine: engine.mergeTree({
 		partitionKey: "toDate(Timestamp)",
 		sortingKey: ["OrgId", "ServiceName", "Timestamp"],
 		ttl: "Timestamp + INTERVAL 30 DAY",
 	}),
+	indexes: [
+		{
+			name: "idx_service_namespace",
+			expr: "ServiceNamespace",
+			type: "set(1000)",
+			granularity: 4,
+		},
+	],
 })
 
 export type ServiceOverviewSpansRow = InferRow<typeof serviceOverviewSpans>
@@ -749,12 +758,21 @@ export const traceListMv = defineDatasource("trace_list_mv", {
 		DeploymentEnv: t.string().lowCardinality(),
 		HasError: t.uint8(),
 		TraceState: t.string(),
+		ServiceNamespace: t.string().lowCardinality(),
 	},
 	engine: engine.mergeTree({
 		partitionKey: "toDate(Timestamp)",
 		sortingKey: ["OrgId", "Timestamp", "TraceId"],
 		ttl: "Timestamp + INTERVAL 30 DAY",
 	}),
+	indexes: [
+		{
+			name: "idx_service_namespace",
+			expr: "ServiceNamespace",
+			type: "set(1000)",
+			granularity: 4,
+		},
+	],
 })
 
 export type TraceListMvRow = InferRow<typeof traceListMv>
@@ -1279,12 +1297,32 @@ export const logsAggregatesHourly = defineDatasource("logs_aggregates_hourly", {
 		DeploymentEnv: t.string().lowCardinality(),
 		Count: t.simpleAggregateFunction("sum", t.uint64()),
 		SizeBytes: t.simpleAggregateFunction("sum", t.uint64()),
+		ServiceNamespace: t.string().lowCardinality(),
 	},
+	// ServiceNamespace was added after this 90-day aggregate already held data.
+	// The source `logs` table only retains 30 days, so Tinybird cannot safely
+	// backfill the full aggregate window from the materialized pipe. Preserve
+	// historical rows in place and default the new dimension to ''.
+	forwardQuery: `SELECT
+    OrgId, Hour, ServiceName, SeverityText, DeploymentEnv,
+    Count, SizeBytes,
+    defaultValueOfTypeName('LowCardinality(String)') AS ServiceNamespace`,
 	engine: engine.aggregatingMergeTree({
 		partitionKey: "toDate(Hour)",
-		sortingKey: ["OrgId", "Hour", "ServiceName", "SeverityText", "DeploymentEnv"],
+		// ServiceNamespace is a grouping dimension, so it must live in the sorting
+		// key (like DeploymentEnv) — AggregatingMergeTree collapses non-key,
+		// non-aggregate columns on merge otherwise.
+		sortingKey: ["OrgId", "Hour", "ServiceName", "SeverityText", "DeploymentEnv", "ServiceNamespace"],
 		ttl: "toDate(Hour) + INTERVAL 90 DAY",
 	}),
+	indexes: [
+		{
+			name: "idx_service_namespace",
+			expr: "ServiceNamespace",
+			type: "set(1000)",
+			granularity: 4,
+		},
+	],
 })
 
 export type LogsAggregatesHourlyRow = InferRow<typeof logsAggregatesHourly>

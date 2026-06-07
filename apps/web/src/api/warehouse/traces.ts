@@ -43,15 +43,18 @@ const ListTracesInputSchema = Schema.Struct({
 	httpMethod: Schema.optional(Schema.String),
 	httpStatusCode: Schema.optional(Schema.String),
 	deploymentEnv: Schema.optional(Schema.String),
+	namespace: Schema.optional(Schema.String),
 	attributeFilters: Schema.optional(Schema.Array(AttributeFilterInput)),
 	resourceAttributeFilters: Schema.optional(Schema.Array(AttributeFilterInput)),
 	rootOnly: Schema.optional(Schema.Boolean),
 	serviceMatchMode: ContainsMatchMode,
 	spanNameMatchMode: ContainsMatchMode,
 	deploymentEnvMatchMode: ContainsMatchMode,
+	namespaceMatchMode: ContainsMatchMode,
 	excludedServices: Schema.optional(Schema.Array(Schema.String)),
 	excludedSpanNames: Schema.optional(Schema.Array(Schema.String)),
 	excludedDeploymentEnvs: Schema.optional(Schema.Array(Schema.String)),
+	excludedNamespaces: Schema.optional(Schema.Array(Schema.String)),
 	excludedHttpMethods: Schema.optional(Schema.Array(Schema.String)),
 	excludedHttpStatusCodes: Schema.optional(Schema.Array(Schema.String)),
 })
@@ -210,6 +213,7 @@ const listTracesEffect = Effect.fn("QueryEngine.listTraces")(function* ({ data }
 	if (input.serviceMatchMode === "contains") matchModes.serviceName = "contains"
 	if (input.spanNameMatchMode === "contains") matchModes.spanName = "contains"
 	if (input.deploymentEnvMatchMode === "contains") matchModes.deploymentEnv = "contains"
+	if (input.namespaceMatchMode === "contains") matchModes.serviceNamespace = "contains"
 
 	const rootOnly = input.rootOnly ?? true
 
@@ -235,6 +239,7 @@ const listTracesEffect = Effect.fn("QueryEngine.listTraces")(function* ({ data }
 				rootSpansOnly: rootOnly,
 				errorsOnly: input.hasError,
 				environments: input.deploymentEnv ? [input.deploymentEnv] : undefined,
+				namespaces: input.namespace ? [input.namespace] : undefined,
 				minDurationMs: input.minDurationMs,
 				maxDurationMs: input.maxDurationMs,
 				matchModes: Object.keys(matchModes).length > 0 ? matchModes : undefined,
@@ -246,6 +251,7 @@ const listTracesEffect = Effect.fn("QueryEngine.listTraces")(function* ({ data }
 				excludedEnvironments: input.excludedDeploymentEnvs?.length
 					? input.excludedDeploymentEnvs
 					: undefined,
+				excludedNamespaces: input.excludedNamespaces?.length ? input.excludedNamespaces : undefined,
 			},
 		},
 	})
@@ -532,6 +538,7 @@ export interface TracesFacets {
 	httpMethods: FacetItem[]
 	httpStatusCodes: FacetItem[]
 	deploymentEnvs: FacetItem[]
+	namespaces: FacetItem[]
 	errorCount: number
 	durationStats: {
 		minDurationMs: number
@@ -565,11 +572,13 @@ const GetTracesFacetsInputSchema = Schema.Struct({
 	httpMethod: Schema.optional(Schema.String),
 	httpStatusCode: Schema.optional(Schema.String),
 	deploymentEnv: Schema.optional(Schema.String),
+	namespace: Schema.optional(Schema.String),
 	attributeFilters: Schema.optional(Schema.Array(AttributeFilterInput)),
 	resourceAttributeFilters: Schema.optional(Schema.Array(AttributeFilterInput)),
 	serviceMatchMode: ContainsMatchMode,
 	spanNameMatchMode: ContainsMatchMode,
 	deploymentEnvMatchMode: ContainsMatchMode,
+	namespaceMatchMode: ContainsMatchMode,
 })
 
 export type GetTracesFacetsInput = Schema.Schema.Type<typeof GetTracesFacetsInputSchema>
@@ -581,6 +590,7 @@ function buildTracesFiltersFromInput(input: GetTracesFacetsInput) {
 	if (input.serviceMatchMode === "contains") matchModes.serviceName = "contains"
 	if (input.spanNameMatchMode === "contains") matchModes.spanName = "contains"
 	if (input.deploymentEnvMatchMode === "contains") matchModes.deploymentEnv = "contains"
+	if (input.namespaceMatchMode === "contains") matchModes.serviceNamespace = "contains"
 
 	return {
 		serviceName: input.service,
@@ -589,6 +599,7 @@ function buildTracesFiltersFromInput(input: GetTracesFacetsInput) {
 		minDurationMs: input.minDurationMs,
 		maxDurationMs: input.maxDurationMs,
 		environments: input.deploymentEnv ? [input.deploymentEnv] : undefined,
+		namespaces: input.namespace ? [input.namespace] : undefined,
 		matchModes: Object.keys(matchModes).length > 0 ? matchModes : undefined,
 		attributeFilters: attributeFilters.length > 0 ? attributeFilters : undefined,
 		resourceAttributeFilters: resourceAttributeFilters.length > 0 ? resourceAttributeFilters : undefined,
@@ -649,6 +660,7 @@ const getTracesFacetsEffect = Effect.fn("QueryEngine.getTracesFacets")(function*
 			httpMethods: byType("httpMethod"),
 			httpStatusCodes: byType("httpStatus"),
 			deploymentEnvs: byType("deploymentEnv"),
+			namespaces: byType("serviceNamespace"),
 			errorCount: errorRow ? Number(errorRow.count) : 0,
 			durationStats: statsData,
 		} satisfies TracesFacets,

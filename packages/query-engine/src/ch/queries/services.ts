@@ -17,11 +17,13 @@ import { apdexExprs, serviceOverviewWhereConditions } from "./query-helpers"
 
 export interface ServiceOverviewOpts {
 	environments?: readonly string[]
+	namespaces?: readonly string[]
 	commitShas?: readonly string[]
 }
 
 export interface ServiceOverviewOutput {
 	readonly serviceName: string
+	readonly serviceNamespace: string
 	readonly environment: string
 	readonly commitSha: string
 	readonly throughput: number
@@ -37,6 +39,7 @@ export function serviceOverviewQuery(opts: ServiceOverviewOpts) {
 	return from(ServiceOverviewSpans)
 		.select(($) => ({
 			serviceName: $.ServiceName,
+			serviceNamespace: $.ServiceNamespace,
 			environment: $.DeploymentEnv,
 			commitSha: $.CommitSha,
 			throughput: CH.count(),
@@ -55,9 +58,10 @@ export function serviceOverviewQuery(opts: ServiceOverviewOpts) {
 			$.Timestamp.gte(param.dateTime("startTime")),
 			$.Timestamp.lte(param.dateTime("endTime")),
 			opts.environments?.length ? CH.inList($.DeploymentEnv, opts.environments) : undefined,
+			opts.namespaces?.length ? CH.inList($.ServiceNamespace, opts.namespaces) : undefined,
 			opts.commitShas?.length ? CH.inList($.CommitSha, opts.commitShas) : undefined,
 		])
-		.groupBy("serviceName", "environment", "commitSha")
+		.groupBy("serviceName", "serviceNamespace", "environment", "commitSha")
 		.orderBy(["throughput", "desc"])
 		.limit(100)
 		.format("JSON")
@@ -232,6 +236,17 @@ export function servicesFacetsQuery(): CHUnionQuery<ServicesFacetsOutput> {
 		.orderBy(["count", "desc"])
 		.limit(50)
 
+	const namespaceQuery = from(ServiceOverviewSpans)
+		.select(($) => ({
+			name: $.ServiceNamespace,
+			count: CH.count(),
+			facetType: CH.lit("namespace"),
+		}))
+		.where(($) => [...baseWhere($), $.ServiceNamespace.neq("")])
+		.groupBy("name")
+		.orderBy(["count", "desc"])
+		.limit(50)
+
 	const commitQuery = from(ServiceOverviewSpans)
 		.select(($) => ({
 			name: $.CommitSha,
@@ -257,5 +272,5 @@ export function servicesFacetsQuery(): CHUnionQuery<ServicesFacetsOutput> {
 		.orderBy(["count", "desc"])
 		.limit(50)
 
-	return unionAll(envQuery, commitQuery, serviceQuery).format("JSON")
+	return unionAll(envQuery, namespaceQuery, commitQuery, serviceQuery).format("JSON")
 }

@@ -33,6 +33,8 @@ const ListLogsInputSchema = Schema.Struct({
 	search: Schema.optional(Schema.String),
 	deploymentEnv: Schema.optional(Schema.String),
 	deploymentEnvMatchMode: Schema.optional(Schema.Literal("contains")),
+	namespace: Schema.optional(Schema.String),
+	namespaceMatchMode: Schema.optional(Schema.Literal("contains")),
 })
 
 export type ListLogsInput = Schema.Schema.Type<typeof ListLogsInputSchema>
@@ -109,6 +111,8 @@ const listLogsEffect = Effect.fn("QueryEngine.listLogs")(function* ({ data }: { 
 					search: input.search,
 					deploymentEnv: input.deploymentEnv,
 					deploymentEnvMatchMode: input.deploymentEnvMatchMode,
+					namespace: input.namespace,
+					namespaceMatchMode: input.namespaceMatchMode,
 				}),
 			})
 		}),
@@ -203,6 +207,8 @@ const getLogsCountEffect = Effect.fn("QueryEngine.getLogsCount")(function* ({
 					search: input.search,
 					environments: input.deploymentEnv ? [input.deploymentEnv] : undefined,
 					deploymentEnvMatchMode: input.deploymentEnvMatchMode,
+					namespaces: input.namespace ? [input.namespace] : undefined,
+					namespaceMatchMode: input.namespaceMatchMode,
 				},
 			},
 		}),
@@ -222,6 +228,7 @@ export interface LogsFacets {
 	services: FacetItem[]
 	severities: FacetItem[]
 	deploymentEnvs: FacetItem[]
+	namespaces: FacetItem[]
 }
 
 export interface LogsFacetsResponse {
@@ -233,6 +240,8 @@ const GetLogsFacetsInputSchema = Schema.Struct({
 	severity: Schema.optional(Schema.String),
 	deploymentEnv: Schema.optional(Schema.String),
 	deploymentEnvMatchMode: Schema.optional(Schema.Literal("contains")),
+	namespace: Schema.optional(Schema.String),
+	namespaceMatchMode: Schema.optional(Schema.Literal("contains")),
 	startTime: Schema.optional(WarehouseDateTimeString),
 	endTime: Schema.optional(WarehouseDateTimeString),
 })
@@ -264,6 +273,8 @@ const getLogsFacetsEffect = Effect.fn("QueryEngine.getLogsFacets")(function* ({
 					severity: input.severity,
 					environments: input.deploymentEnv ? [input.deploymentEnv] : undefined,
 					deploymentEnvMatchMode: input.deploymentEnvMatchMode,
+					namespaces: input.namespace ? [input.namespace] : undefined,
+					namespaceMatchMode: input.namespaceMatchMode,
 				},
 			},
 		}),
@@ -273,6 +284,7 @@ const getLogsFacetsEffect = Effect.fn("QueryEngine.getLogsFacets")(function* ({
 	const services: FacetItem[] = []
 	const severities: FacetItem[] = []
 	const deploymentEnvs: FacetItem[] = []
+	const namespaces: FacetItem[] = []
 
 	for (const row of facetsData) {
 		const count = Number(row.count)
@@ -282,11 +294,13 @@ const getLogsFacetsEffect = Effect.fn("QueryEngine.getLogsFacets")(function* ({
 			severities.push({ name: row.name, count })
 		} else if (row.facetType === "deploymentEnv" && row.name) {
 			deploymentEnvs.push({ name: row.name, count })
+		} else if (row.facetType === "namespace" && row.name) {
+			namespaces.push({ name: row.name, count })
 		}
 	}
 
 	return {
-		data: { services, severities, deploymentEnvs },
+		data: { services, severities, deploymentEnvs, namespaces },
 	}
 })
 

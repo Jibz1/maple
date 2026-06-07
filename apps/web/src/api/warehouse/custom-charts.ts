@@ -247,6 +247,7 @@ const SharedFiltersSchema = Schema.Struct({
 	metricType: Schema.optional(Schema.Literals(["sum", "gauge", "histogram", "exponential_histogram"])),
 	rootSpansOnly: Schema.optional(Schema.Boolean),
 	environments: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
+	namespaces: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 	commitShas: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 	groupByAttributeKeys: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 	groupByAttributeKey: Schema.optional(Schema.String),
@@ -343,6 +344,7 @@ function buildTimeseriesQuerySpec(data: CustomChartTimeSeriesInput): QuerySpec |
 				spanName: data.filters?.spanName,
 				rootSpansOnly: data.filters?.rootSpansOnly,
 				environments: data.filters?.environments,
+				namespaces: data.filters?.namespaces,
 				commitShas: data.filters?.commitShas,
 				groupByAttributeKeys: data.filters?.groupByAttributeKeys,
 				attributeFilters: data.filters?.attributeFilters,
@@ -369,6 +371,7 @@ function buildTimeseriesQuerySpec(data: CustomChartTimeSeriesInput): QuerySpec |
 				serviceName: data.filters?.serviceName,
 				severity: data.filters?.severity,
 				environments: data.filters?.environments,
+				namespaces: data.filters?.namespaces,
 			},
 			bucketSeconds: data.bucketSeconds,
 		}

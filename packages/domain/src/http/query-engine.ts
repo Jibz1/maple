@@ -172,6 +172,7 @@ export class ServiceOverviewRequest extends Schema.Class<ServiceOverviewRequest>
 	startTime: TinybirdDateTime,
 	endTime: TinybirdDateTime,
 	environments: OptionalStringArray,
+	namespaces: OptionalStringArray,
 	commitShas: OptionalStringArray,
 }) {}
 
@@ -416,6 +417,8 @@ export class ListLogsRequest extends Schema.Class<ListLogsRequest>("ListLogsRequ
 	search: Schema.optional(Schema.String),
 	deploymentEnv: Schema.optional(Schema.String),
 	deploymentEnvMatchMode: Schema.optional(Schema.Literal("contains")),
+	namespace: Schema.optional(Schema.String),
+	namespaceMatchMode: Schema.optional(Schema.Literal("contains")),
 	limit: Schema.optional(Schema.Number),
 }) {}
 

@@ -284,7 +284,8 @@ export const serviceOverviewSpansMv = defineMaterializedView("service_overview_s
           TraceState,
           ResourceAttributes['deployment.environment'] AS DeploymentEnv,
           ResourceAttributes['deployment.commit_sha'] AS CommitSha,
-          SampleRate
+          SampleRate,
+          ResourceAttributes['service.namespace'] AS ServiceNamespace
         FROM traces
         WHERE SpanKind IN ('Server', 'Consumer') OR ParentSpanId = ''
       `,
@@ -795,7 +796,8 @@ export const traceListMvMv = defineMaterializedView("trace_list_mv_mv", {
             OR (SpanAttributes['http.status_code'] != '' AND toUInt16OrZero(SpanAttributes['http.status_code']) >= 500)
             OR (SpanAttributes['http.response.status_code'] != '' AND toUInt16OrZero(SpanAttributes['http.response.status_code']) >= 500)
           ) AS HasError,
-          TraceState
+          TraceState,
+          ResourceAttributes['service.namespace'] AS ServiceNamespace
         FROM traces
         WHERE ParentSpanId = ''
       `,
@@ -1161,9 +1163,10 @@ export const logsAggregatesHourlyMv = defineMaterializedView("logs_aggregates_ho
           SeverityText,
           ResourceAttributes['deployment.environment'] AS DeploymentEnv,
           count() AS Count,
-          sum(length(Body) + 200) AS SizeBytes
+          sum(length(Body) + 200) AS SizeBytes,
+          ResourceAttributes['service.namespace'] AS ServiceNamespace
         FROM logs
-        GROUP BY OrgId, Hour, ServiceName, SeverityText, DeploymentEnv
+        GROUP BY OrgId, Hour, ServiceName, SeverityText, DeploymentEnv, ServiceNamespace
       `,
 		}),
 	],
