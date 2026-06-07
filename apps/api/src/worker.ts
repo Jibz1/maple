@@ -40,6 +40,7 @@ const WorkerPlatformLive = Layer.mergeAll(
 // live in the same runtime as the routes that emit spans.
 const telemetry = MapleCloudflareSDK.make({
 	serviceName: "maple-api",
+	serviceNamespace: "backend",
 	dropSpanNames: ["McpServer/Notifications."],
 })
 

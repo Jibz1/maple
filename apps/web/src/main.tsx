@@ -31,6 +31,7 @@ if (replayIngestKey) {
 	MapleBrowser.init({
 		ingestKey: replayIngestKey,
 		serviceName: "maple-web",
+		serviceNamespace: "client",
 		endpoint: ingestUrl,
 		environment: import.meta.env.MODE,
 		tracing: { enabled: true, instrumentFetch: false },
