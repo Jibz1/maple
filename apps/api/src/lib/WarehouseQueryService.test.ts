@@ -389,6 +389,69 @@ describe("WarehouseQueryService.ingest writes through the SQL client", () => {
 	})
 })
 
+describe("createClickHouseSqlClient.insert wire framing", () => {
+	// Regression guard for the demo-seed onboarding outage: the official
+	// client.insert() puts `INSERT … FORMAT JSONEachRow` in the `?query=` URL
+	// param, which proxied ClickHouse endpoints drop — the NDJSON body is then
+	// parsed as SQL ("Syntax error at position 1 ({)"). The insert must frame the
+	// whole statement in the request BODY, like the (working) read path.
+	const chConfig = {
+		_tag: "clickhouse" as const,
+		url: "https://ch.example.com",
+		username: "u",
+		password: "p",
+		database: "default",
+	}
+
+	it("sends INSERT … FORMAT JSONEachRow + rows in the body, not the ?query= param", async () => {
+		const captured: Array<{ url: string; body: string }> = []
+		const realFetch = globalThis.fetch
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			captured.push({
+				url: String(input),
+				body: typeof init?.body === "string" ? init.body : String(init?.body ?? ""),
+			})
+			return new Response("", { status: 200 })
+		}) as typeof fetch
+
+		try {
+			const client = __testables.createClickHouseSqlClient(chConfig)
+			await client.insert("traces", [{ trace_id: "a" }, { trace_id: "b" }])
+		} finally {
+			globalThis.fetch = realFetch
+		}
+
+		assert.strictEqual(captured.length, 1)
+		const req = captured[0]!
+		// The statement + data ride in the body…
+		assert.strictEqual(
+			req.body,
+			'INSERT INTO traces FORMAT JSONEachRow\n{"trace_id":"a"}\n{"trace_id":"b"}',
+		)
+		// …and NOT in the URL query string (the param the proxy drops).
+		assert.isFalse(req.url.includes("query=INSERT"))
+		assert.isFalse(req.url.toUpperCase().includes("INSERT+INTO"))
+	})
+
+	it("no-ops on an empty row set (no request issued)", async () => {
+		let calls = 0
+		const realFetch = globalThis.fetch
+		globalThis.fetch = (async () => {
+			calls++
+			return new Response("", { status: 200 })
+		}) as typeof fetch
+
+		try {
+			const client = __testables.createClickHouseSqlClient(chConfig)
+			await client.insert("traces", [])
+		} finally {
+			globalThis.fetch = realFetch
+		}
+
+		assert.strictEqual(calls, 0)
+	})
+})
+
 describe("WarehouseUpstreamError surfaces transient classification", () => {
 	it("carries upstreamStatus on 503", () => {
 		// Sanity check that the constructor flow we depend on for retry is intact.

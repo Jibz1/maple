@@ -52,7 +52,18 @@ const createClickHouseSqlClient = (config: ClickHouseConfig): WarehouseSqlClient
 			return { data }
 		},
 		insert: async (datasource, rows) => {
-			await client.insert({ table: datasource, values: rows, format: "JSONEachRow" })
+			if (rows.length === 0) return
+			// ClickHouse inserts must frame the statement in the request BODY, not the
+			// `?query=` URL param. The official `client.insert()` puts `INSERT INTO …
+			// FORMAT JSONEachRow` in the query param (see @clickhouse/client-web
+			// web_connection: insert() adds `query` to searchParams; query()/command()
+			// send it as the body). Managed/proxied ClickHouse endpoints drop that param,
+			// so the NDJSON body gets parsed as SQL — "Syntax error at position 1 ({)" —
+			// 500-ing every write (this broke demo-seed onboarding). The read path works
+			// because `query()` already sends SQL in the body, so we mirror it: send
+			// `INSERT … FORMAT JSONEachRow\n<ndjson>` as the body via command().
+			const ndjson = rows.map((row) => JSON.stringify(row)).join("\n")
+			await client.command({ query: `INSERT INTO ${datasource} FORMAT JSONEachRow\n${ndjson}` })
 		},
 	}
 }
@@ -207,4 +218,5 @@ export const __testables = {
 	reset: () => {
 		sqlClientFactory = createClient
 	},
+	createClickHouseSqlClient,
 }
