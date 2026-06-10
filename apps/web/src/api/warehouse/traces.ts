@@ -22,9 +22,15 @@ import {
 } from "@/api/warehouse/effect-utils"
 import { getHttpInfo, type HttpInfo } from "@maple/ui/lib/http"
 import type { Span, SpanNode } from "@maple/ui/types"
+import {
+	buildSpanTree,
+	dedupeBySpanId,
+	parseAttributes,
+	transformSpan,
+	type SpanHierarchyRow,
+} from "@maple/ui/lib/span-tree"
 
 const toTraceId = Schema.decodeSync(TraceId)
-const toSpanId = Schema.decodeSync(SpanId)
 
 const ContainsMatchMode = Schema.optional(Schema.Literals(["contains"]))
 
@@ -322,122 +328,6 @@ function computeSpanHierarchyRange(timestamp: string | undefined): { startTime: 
 	}
 }
 
-function parseAttributes(value: string | null | undefined): Record<string, string> {
-	if (!value) return {}
-	try {
-		const parsed = JSON.parse(value)
-		return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {}
-	} catch {
-		return {}
-	}
-}
-
-interface SpanHierarchyRow {
-	traceId: string
-	spanId: string
-	parentSpanId: string
-	spanName: string
-	serviceName: string
-	spanKind: string
-	durationMs: number
-	startTime: string
-	statusCode: string
-	statusMessage: string
-	spanAttributes: string
-	resourceAttributes: string
-}
-
-function transformSpan(raw: SpanHierarchyRow): Span {
-	return {
-		traceId: toTraceId(raw.traceId),
-		spanId: toSpanId(raw.spanId),
-		parentSpanId: raw.parentSpanId,
-		spanName: raw.spanName,
-		serviceName: raw.serviceName,
-		spanKind: raw.spanKind,
-		durationMs: Number(raw.durationMs),
-		startTime: String(raw.startTime),
-		statusCode: raw.statusCode,
-		statusMessage: raw.statusMessage,
-		spanAttributes: parseAttributes(raw.spanAttributes),
-		resourceAttributes: parseAttributes(raw.resourceAttributes),
-	}
-}
-
-function buildSpanTree(spans: Span[]): SpanNode[] {
-	const spanMap = new Map<string, SpanNode>()
-	const rootSpans: SpanNode[] = []
-
-	for (const span of spans) {
-		spanMap.set(span.spanId, { ...span, children: [], depth: 0 })
-	}
-
-	const missingParentGroups = new Map<string, SpanNode[]>()
-
-	for (const span of spans) {
-		const node = spanMap.get(span.spanId)
-		if (!node) {
-			continue
-		}
-		if (span.parentSpanId && spanMap.has(span.parentSpanId)) {
-			const parent = spanMap.get(span.parentSpanId)
-			parent?.children.push(node)
-		} else if (span.parentSpanId) {
-			const group = missingParentGroups.get(span.parentSpanId) || []
-			group.push(node)
-			missingParentGroups.set(span.parentSpanId, group)
-		} else {
-			rootSpans.push(node)
-		}
-	}
-
-	for (const [missingParentId, children] of missingParentGroups) {
-		const placeholder: SpanNode = {
-			traceId: children[0].traceId,
-			spanId: toSpanId(missingParentId),
-			parentSpanId: "",
-			spanName: "Missing Span",
-			serviceName: "unknown",
-			spanKind: "SPAN_KIND_INTERNAL",
-			durationMs: 0,
-			startTime: children[0].startTime,
-			statusCode: "Unset",
-			statusMessage: "",
-			spanAttributes: {},
-			resourceAttributes: {},
-			children,
-			depth: 0,
-			isMissing: true,
-		}
-		rootSpans.push(placeholder)
-	}
-
-	function setDepth(node: SpanNode, depth: number) {
-		node.depth = depth
-		for (const child of node.children) {
-			setDepth(child, depth + 1)
-		}
-	}
-
-	for (const root of rootSpans) {
-		setDepth(root, 0)
-	}
-
-	function sortChildren(node: SpanNode) {
-		node.children.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-		for (const child of node.children) {
-			sortChildren(child)
-		}
-	}
-
-	for (const root of rootSpans) {
-		sortChildren(root)
-	}
-
-	rootSpans.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-	return rootSpans
-}
-
 export function getSpanHierarchy({ data }: { data: GetSpanHierarchyInput }) {
 	return getSpanHierarchyEffect({ data })
 }
@@ -467,7 +357,7 @@ const getSpanHierarchyEffect = Effect.fn("QueryEngine.getSpanHierarchy")(functio
 		}),
 	)
 
-	const spans = result.data.map((raw) => transformSpan(raw as SpanHierarchyRow))
+	const spans = dedupeBySpanId(result.data.map((raw) => transformSpan(raw as SpanHierarchyRow)))
 	const rootSpans = buildSpanTree(spans)
 	const totalDurationMs = spans.length > 0 ? Math.max(...spans.map((span) => span.durationMs)) : 0
 
