@@ -6,6 +6,7 @@ import { Schema } from "effect"
 import { TraceId } from "@maple/domain"
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
+import { useAppHotkey } from "@/hooks/use-app-hotkey"
 import { TraceReplayLink } from "@/components/replays/trace-replay-link"
 import { QueryErrorState } from "@/components/common/query-error-state"
 import { TraceViewTabs } from "@maple/ui/components/traces/trace-view-tabs"
@@ -197,6 +198,10 @@ function TraceDetailContent({
 			replace: true,
 		})
 	}, [navigate])
+
+	// Esc closes the inline span panel; while the nested log sheet is open the
+	// dialog guard defers to it, so Esc closes the sheet first.
+	useAppHotkey("list.clear", handleCloseSpanDetails, { enabled: selectedSpan !== null })
 
 	const services = React.useMemo(
 		() => [...new Set(data.spans.map((s: Span) => s.serviceName))],

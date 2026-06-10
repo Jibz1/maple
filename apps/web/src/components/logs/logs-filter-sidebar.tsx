@@ -7,6 +7,7 @@ import { useEffectiveTimeRange } from "@/hooks/use-effective-time-range"
 import { FilterSection, SearchableFilterSection } from "@/components/filters/filter-section"
 import { Route } from "@/routes/logs"
 import { Separator } from "@maple/ui/components/ui/separator"
+import { Kbd } from "@maple/ui/components/ui/kbd"
 import {
 	InputGroup,
 	InputGroupAddon,
@@ -121,7 +122,13 @@ export function LogsFilterSidebar() {
 									value={searchText}
 									onChange={(e) => handleSearchChange(e.target.value)}
 									placeholder="Search log messages..."
+									data-shortcut-focus="search"
 								/>
+								{!searchText && (
+									<InputGroupAddon align="inline-end">
+										<Kbd>/</Kbd>
+									</InputGroupAddon>
+								)}
 								{searchText && (
 									<InputGroupAddon align="inline-end">
 										<InputGroupButton

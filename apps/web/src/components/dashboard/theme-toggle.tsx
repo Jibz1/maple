@@ -1,5 +1,6 @@
 import { useTheme } from "@maple/ui/hooks/use-theme"
 import { Switch } from "@maple/ui/components/ui/switch"
+import { Kbd } from "@maple/ui/components/ui/kbd"
 import { MoonIcon, SunIcon } from "@/components/icons"
 
 /**
@@ -22,12 +23,14 @@ export function ThemeToggle() {
 				<SunIcon size={16} className="shrink-0 text-muted-foreground" />
 			)}
 			<span>Dark mode</span>
-			<Switch
-				className="ml-auto"
-				checked={isDark}
-				onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-				aria-label="Toggle dark mode"
-			/>
+			<span className="ml-auto flex items-center gap-2">
+				<Kbd>T</Kbd>
+				<Switch
+					checked={isDark}
+					onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+					aria-label="Toggle dark mode"
+				/>
+			</span>
 		</div>
 	)
 }
