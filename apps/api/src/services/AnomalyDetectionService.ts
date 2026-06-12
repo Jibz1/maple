@@ -69,6 +69,8 @@ const STATE_RETENTION_MS = 14 * 24 * HOUR_MS
 const RETENTION_PHASE_EVERY_N_TICKS = 36
 const TICK_CADENCE_MS = 5 * 60 * 1000
 const ERROR_SPIKE_BASELINE_CACHE_BUCKET = "anomaly-errbase"
+/** D1 caps bound parameters per statement (~100); mirror ErrorsService's chunking. */
+const D1_INARRAY_CHUNK_SIZE = 90
 
 const describeCause = (cause: unknown): string | undefined => {
 	if (cause == null) return undefined
@@ -610,25 +612,29 @@ export class AnomalyDetectionService extends Context.Service<
 			)
 
 			// firstSeenAt per fingerprint so young issues stay with first_seen handling.
+			// Chunked: D1 caps bound parameters at ~100 per statement, so a single
+			// inArray over a busy org's fingerprints fails the whole tick for it
+			// (same constraint as ErrorsService's D1_INARRAY_CHUNK_SIZE).
 			const fingerprints = [...new Set(spikes.observations.map((o) => o.fingerprintHash))]
-			const issueRows =
-				fingerprints.length > 0
-					? yield* dbExecute((db) =>
-							db
-								.select({
-									fingerprintHash: errorIssues.fingerprintHash,
-									issueId: errorIssues.id,
-									firstSeenAt: errorIssues.firstSeenAt,
-								})
-								.from(errorIssues)
-								.where(
-									and(
-										eq(errorIssues.orgId, orgId),
-										inArray(errorIssues.fingerprintHash, fingerprints.slice(0, 500)),
-									),
-								),
-						)
-					: []
+			const fingerprintChunks: string[][] = []
+			for (let i = 0; i < fingerprints.length; i += D1_INARRAY_CHUNK_SIZE) {
+				fingerprintChunks.push(fingerprints.slice(i, i + D1_INARRAY_CHUNK_SIZE))
+			}
+			const issueRowChunks = yield* Effect.forEach(fingerprintChunks, (chunk) =>
+				dbExecute((db) =>
+					db
+						.select({
+							fingerprintHash: errorIssues.fingerprintHash,
+							issueId: errorIssues.id,
+							firstSeenAt: errorIssues.firstSeenAt,
+						})
+						.from(errorIssues)
+						.where(
+							and(eq(errorIssues.orgId, orgId), inArray(errorIssues.fingerprintHash, chunk)),
+						),
+				),
+			)
+			const issueRows = issueRowChunks.flat()
 			const issueFirstSeenAt = new Map(issueRows.map((r) => [r.fingerprintHash, r.firstSeenAt]))
 			const issueIdByFingerprint = new Map(issueRows.map((r) => [r.fingerprintHash, r.issueId]))
 
