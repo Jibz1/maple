@@ -1,5 +1,4 @@
 import {
-	AlertRuntime,
 	AlertsService,
 	AnomalyDetectionService,
 	BucketCacheService,
@@ -10,6 +9,7 @@ import {
 	EmailService,
 	Env,
 	ErrorsService,
+	EscalationService,
 	HazelOAuthService,
 	NotificationDispatcher,
 	OnboardingEmailService,
@@ -25,7 +25,7 @@ import {
 	WorkerConfigProviderLayer,
 	WorkerEnvironment,
 } from "@maple/effect-cloudflare"
-import { Cause, Effect, Layer } from "effect"
+import { Cause, Effect, Layer, Match } from "effect"
 
 // Module-scope construction; `flush(env)` resolves env on first call. The
 // in-isolate buffers coalesce concurrent scheduled ticks into one POST per
@@ -64,20 +64,27 @@ const buildLayer = (_env: Record<string, unknown>) => {
 
 	const HazelOAuthServiceLive = HazelOAuthService.layer.pipe(Layer.provide(BaseLive))
 
+	// WorkerEnvironment is merged in so the incident-open issue-hub hook can see
+	// the cross-script AI_TRIAGE_WORKFLOW binding (absent → triage marked failed).
+	// AlertRuntime is a Context.Reference with defaults, so it needs no wiring here.
 	const AlertsServiceLive = AlertsService.layer.pipe(
 		Layer.provide(
 			Layer.mergeAll(
 				BaseLive,
 				QueryEngineServiceLive,
 				WarehouseQueryServiceLive,
-				AlertRuntime.layer,
 				HazelOAuthServiceLive,
+				WorkerEnvironment.layer,
 			),
 		),
 	)
 
 	const NotificationDispatcherLive = NotificationDispatcher.layer.pipe(
 		Layer.provide(Layer.mergeAll(BaseLive, HazelOAuthServiceLive)),
+	)
+
+	const EscalationServiceLive = EscalationService.layer.pipe(
+		Layer.provide(Layer.mergeAll(BaseLive, NotificationDispatcherLive)),
 	)
 
 	// WorkerEnvironment is merged in so the incident-open AI-triage hook can see
@@ -128,6 +135,7 @@ const buildLayer = (_env: Record<string, unknown>) => {
 		DigestServiceLive,
 		OnboardingEmailServiceLive,
 		ErrorsServiceLive,
+		EscalationServiceLive,
 		ServiceMapRollupServiceLive,
 	).pipe(Layer.provideMerge(telemetry.layer), Layer.provideMerge(ConfigLive))
 }
@@ -171,6 +179,29 @@ const errorTick = Effect.gen(function* () {
 	Effect.withSpan("alerting.error_tick"),
 	Effect.catchCause((cause) =>
 		Effect.logError("Errors worker tick failed").pipe(
+			Effect.annotateLogs({ error: Cause.pretty(cause) }),
+		),
+	),
+)
+
+const escalationTick = Effect.gen(function* () {
+	const escalations = yield* EscalationService
+	const result = yield* escalations.runEscalationTick()
+	if (result.processed > 0) {
+		yield* Effect.logInfo("Escalation tick complete").pipe(
+			Effect.annotateLogs({
+				processed: result.processed,
+				sent: result.sent,
+				skipped: result.skipped,
+				failed: result.failed,
+				retried: result.retried,
+			}),
+		)
+	}
+}).pipe(
+	Effect.withSpan("alerting.escalation_tick"),
+	Effect.catchCause((cause) =>
+		Effect.logError("Escalation tick failed").pipe(
 			Effect.annotateLogs({ error: Cause.pretty(cause) }),
 		),
 	),
@@ -242,6 +273,8 @@ const anomalyTick = Effect.gen(function* () {
 			orgsProcessed: result.orgsProcessed,
 			seriesEvaluated: result.seriesEvaluated,
 			incidentsOpened: result.incidentsOpened,
+			incidentsAttached: result.incidentsAttached,
+			incidentsReopened: result.incidentsReopened,
 			incidentsContinued: result.incidentsContinued,
 			incidentsResolved: result.incidentsResolved,
 			orgFailures: result.orgFailures,
@@ -270,16 +303,18 @@ export default {
 		env: Record<string, unknown>,
 		ctx: ExecutionContextLike,
 	): Promise<void> {
-		const program =
-			event.cron === "*/5 * * * *"
-				? anomalyTick
-				: event.cron === "*/15 * * * *"
-					? digestTick
-					: event.cron === "0 * * * *"
-						? serviceMapRollupTick
-						: event.cron === "0 9 * * *"
-							? onboardingTick
-							: Effect.all([alertTick, errorTick], { concurrency: 2, discard: true })
+		const program = Match.value(event.cron).pipe(
+			Match.when("*/5 * * * *", () => anomalyTick),
+			Match.when("*/15 * * * *", () => digestTick),
+			Match.when("0 * * * *", () => serviceMapRollupTick),
+			Match.when("0 9 * * *", () => onboardingTick),
+			Match.orElse(() =>
+				Effect.all([alertTick, errorTick, escalationTick], {
+					concurrency: 2,
+					discard: true,
+				}),
+			),
+		)
 		try {
 			await runScheduledEffect(buildLayer(env), program, ctx)
 		} finally {
