@@ -435,7 +435,7 @@ export function ChatConversation({
 				<ConversationScrollButton />
 			</Conversation>
 
-			<div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4">
+			<div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
 				{(messages.length > 0 || isAlertMode || isWidgetFixMode) && (
 					<Suggestions className="mb-3">
 						{suggestions.map((s) => (
