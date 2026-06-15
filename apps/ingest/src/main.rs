@@ -30,7 +30,7 @@ use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use hmac::{Hmac, Mac};
-use maple_ingest::clickhouse_insert_mappings::PROJECT_REVISION as CLICKHOUSE_PROJECT_REVISION;
+use maple_ingest::clickhouse_insert_mappings::SCHEMA_VERSION as CLICKHOUSE_SCHEMA_VERSION;
 use maple_ingest::metrics;
 use maple_ingest::otel::{build_resource, forward_client_span, ResourceConfig};
 use maple_ingest::telemetry::{
@@ -671,7 +671,9 @@ struct ResolvedIngestKey {
     // branch-free beyond a single boolean check.
     self_managed: bool,
     // Native direct ClickHouse ingest is stricter: the connection is healthy
-    // and the applied schema revision equals this binary's ClickHouse revision.
+    // and the applied schema version equals this binary's ClickHouse migration
+    // version (SCHEMA_VERSION) — NOT the Tinybird-coupled PROJECT_REVISION, so a
+    // Tinybird-only schema change can't silently un-ready a BYO-CH org.
     clickhouse_ready: bool,
 }
 
@@ -3499,7 +3501,7 @@ impl ClickHouseTargetProvider for ClickHouseTargetResolver {
         let Some(row) = self.store.fetch_clickhouse_target(org_id).await? else {
             return Ok(None);
         };
-        if row.schema_version != CLICKHOUSE_PROJECT_REVISION {
+        if row.schema_version != CLICKHOUSE_SCHEMA_VERSION {
             return Ok(None);
         }
 
@@ -3637,7 +3639,7 @@ impl D1KeyStore {
         self.query(
             sanity_sql,
             vec![
-                serde_json::Value::String(CLICKHOUSE_PROJECT_REVISION.to_string()),
+                serde_json::Value::String(CLICKHOUSE_SCHEMA_VERSION.to_string()),
                 serde_json::Value::String("__ingest_probe_no_match__".to_string()),
             ],
         )
@@ -3712,7 +3714,7 @@ impl KeyStore for D1KeyStore {
             .query(
                 &sql,
                 vec![
-                    serde_json::Value::String(CLICKHOUSE_PROJECT_REVISION.to_string()),
+                    serde_json::Value::String(CLICKHOUSE_SCHEMA_VERSION.to_string()),
                     serde_json::Value::String(key_hash.to_string()),
                 ],
             )
@@ -3742,7 +3744,7 @@ impl KeyStore for D1KeyStore {
             .query(
                 sql,
                 vec![
-                    serde_json::Value::String(CLICKHOUSE_PROJECT_REVISION.to_string()),
+                    serde_json::Value::String(CLICKHOUSE_SCHEMA_VERSION.to_string()),
                     serde_json::Value::String(connector_id.to_string()),
                     serde_json::Value::String(secret_hash.to_string()),
                 ],
@@ -3821,7 +3823,7 @@ impl KeyStore for D1KeyStore {
                 sql,
                 vec![
                     serde_json::Value::String(org_id.to_string()),
-                    serde_json::Value::String(CLICKHOUSE_PROJECT_REVISION.to_string()),
+                    serde_json::Value::String(CLICKHOUSE_SCHEMA_VERSION.to_string()),
                 ],
             )
             .await?;
@@ -3848,7 +3850,7 @@ impl KeyStore for D1KeyStore {
             .query(
                 sql,
                 vec![
-                    serde_json::Value::String(CLICKHOUSE_PROJECT_REVISION.to_string()),
+                    serde_json::Value::String(CLICKHOUSE_SCHEMA_VERSION.to_string()),
                     serde_json::Value::String(org_id.to_string()),
                 ],
             )
@@ -5159,7 +5161,7 @@ mod tests {
                 ch_password_iv: None,
                 ch_password_tag: None,
                 ch_database: "maple".to_string(),
-                schema_version: CLICKHOUSE_PROJECT_REVISION.to_string(),
+                schema_version: CLICKHOUSE_SCHEMA_VERSION.to_string(),
             },
         );
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -5269,7 +5271,7 @@ mod tests {
                 ch_password_iv: Some("AQIDBAUGBwgJCgsM".to_string()),
                 ch_password_tag: Some("b7D1umrvI8557NFvR9nJ/A==".to_string()),
                 ch_database: "maple".to_string(),
-                schema_version: CLICKHOUSE_PROJECT_REVISION.to_string(),
+                schema_version: CLICKHOUSE_SCHEMA_VERSION.to_string(),
             },
         );
 
@@ -5308,7 +5310,7 @@ mod tests {
                 ch_password_iv: Some("AQIDBAUGBwgJCgsM".to_string()),
                 ch_password_tag: Some("b7D1umrvI8557NFvR9nJ/A==".to_string()),
                 ch_database: "maple".to_string(),
-                schema_version: CLICKHOUSE_PROJECT_REVISION.to_string(),
+                schema_version: CLICKHOUSE_SCHEMA_VERSION.to_string(),
             },
         );
 
