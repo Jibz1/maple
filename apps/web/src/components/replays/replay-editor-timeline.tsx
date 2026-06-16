@@ -3,6 +3,8 @@ import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { TraceId } from "@maple/domain/http"
 import { cn } from "@maple/ui/utils"
+import { HttpSpanLabel } from "@maple/ui/components/traces/http-span-label"
+import { parseAttributes } from "@maple/ui/lib/span-tree"
 import { Result, useAtomValue } from "@/lib/effect-atom"
 import {
 	getSessionTraceSummariesResultAtom,
@@ -53,6 +55,9 @@ export interface SessionTraceSummary {
 	readonly durationMs: number
 	readonly rootSpanName: string
 	readonly rootServiceName: string
+	/** Root span's OTel kind + attributes (JSON), used to render the HTTP label. */
+	readonly rootSpanKind?: string
+	readonly rootSpanAttributes?: string
 	readonly spanCount: number
 	readonly hasError: number
 }
@@ -390,7 +395,13 @@ function TraceRow({
 					>
 						<span className="min-w-0 flex-1">
 							<span className="flex items-center gap-1 truncate font-medium text-foreground">
-								<span className="truncate">{summary.rootSpanName || "trace"}</span>
+								<HttpSpanLabel
+									spanName={summary.rootSpanName || "trace"}
+									spanAttributes={parseAttributes(summary.rootSpanAttributes)}
+									spanKind={summary.rootSpanKind}
+									className="min-w-0"
+									textClassName="truncate"
+								/>
 								<ExternalLinkIcon className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/trace:opacity-100" />
 							</span>
 							<span className="block truncate font-mono text-[10px] text-muted-foreground">
@@ -463,6 +474,8 @@ interface SpanRow {
 	readonly startTime: string
 	readonly durationMs: number
 	readonly statusCode: string
+	readonly spanAttributes: Record<string, string>
+	readonly spanKind: string
 }
 
 function TraceSpanLane({
@@ -540,7 +553,13 @@ function SpanRowItem({ span, player }: { span: SpanRow; player: ReplayPlayerCont
 				className={cn(LANE_GUTTER, "shrink-0 truncate border-r border-border/40 px-2 py-1 pl-6")}
 				title={`${span.serviceName} · ${span.spanName}`}
 			>
-				<span className="block truncate text-[10px] text-muted-foreground">{span.spanName}</span>
+				<HttpSpanLabel
+					spanName={span.spanName}
+					spanAttributes={span.spanAttributes}
+					spanKind={span.spanKind}
+					className="text-[10px]"
+					textClassName="text-[10px] text-muted-foreground"
+				/>
 			</div>
 			<button
 				type="button"
