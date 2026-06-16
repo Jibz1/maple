@@ -10,7 +10,7 @@ import { DestinationCard } from "@/components/alerts/destination-card"
 import { ProviderLogo } from "@/components/alerts/destination-provider"
 import { AlertStatusBadge } from "@/components/alerts/alert-status-badge"
 import { AlertSeverityBadge } from "@/components/alerts/alert-severity-badge"
-import { AlertStatCard, AlertFiringHero } from "@/components/alerts/alert-stat-card"
+import { AlertStatStrip, AlertFiringHero } from "@/components/alerts/alert-stat-card"
 import { AlertTagControls } from "@/components/alerts/alert-tag-controls"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { MapleApiAtomClient } from "@/lib/services/common/atom-client"
@@ -112,9 +112,23 @@ const signalBadgeClass: Record<string, string> = {
 	p95_latency: "border-primary/30 text-primary",
 	p99_latency: "border-primary/30 text-primary",
 	apdex: "border-severity-warn/30 text-severity-warn",
-	throughput: "border-emerald-500/30 text-emerald-500",
+	// Throughput rides the dedicated chart-throughput hue so the chip stays
+	// distinguishable from the amber p95/apdex chips (see DESIGN.md).
+	throughput: "border-[var(--chart-throughput)]/30 text-[var(--chart-throughput)]",
 	metric: "border-muted-foreground/30 text-muted-foreground",
 	query: "border-muted-foreground/30 text-muted-foreground",
+}
+
+/** Critical before warning, then most-recently-triggered first. */
+const severityRank: Record<string, number> = { critical: 0, warning: 1 }
+function sortIncidents(incidents: AlertIncidentDocument[]): AlertIncidentDocument[] {
+	return [...incidents].sort((a, b) => {
+		const bySeverity = (severityRank[a.severity] ?? 2) - (severityRank[b.severity] ?? 2)
+		if (bySeverity !== 0) return bySeverity
+		const ta = a.lastTriggeredAt ? new Date(a.lastTriggeredAt).getTime() : 0
+		const tb = b.lastTriggeredAt ? new Date(b.lastTriggeredAt).getTime() : 0
+		return tb - ta
+	})
 }
 
 function SignalBadge({ signalType }: { signalType: string }) {
@@ -269,7 +283,7 @@ function MonitorTab({
 		[openIncidents, tagsByRuleId],
 	)
 	const visibleIncidents = useMemo(
-		() => [...filterByTags(openIncidents, (i) => tagsByRuleId.get(i.ruleId) ?? [], selectedTags)],
+		() => sortIncidents([...filterByTags(openIncidents, (i) => tagsByRuleId.get(i.ruleId) ?? [], selectedTags)]),
 		[openIncidents, tagsByRuleId, selectedTags],
 	)
 	const incidentGroups = useMemo(
@@ -287,13 +301,9 @@ function MonitorTab({
 	if (loading) {
 		return (
 			<div className="space-y-6">
-				<Skeleton className="h-[112px] w-full" />
-				<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-					<Skeleton className="h-[88px]" />
-					<Skeleton className="h-[88px]" />
-					<Skeleton className="h-[88px]" />
-				</div>
-				<Skeleton className="h-48" />
+				<Skeleton className="h-[60px] w-full" />
+				<Skeleton className="h-48 w-full" />
+				<Skeleton className="h-[84px] w-full" />
 			</div>
 		)
 	}
@@ -350,8 +360,8 @@ function MonitorTab({
 	)
 
 	return (
-		<div className="space-y-8">
-			{/* Hero firing card */}
+		<div className="space-y-6">
+			{/* Status bar — flat one-row state; the incident list leads directly below */}
 			<AlertFiringHero
 				openCount={openIncidents.length}
 				criticalCount={criticalCount}
@@ -361,25 +371,7 @@ function MonitorTab({
 				lastEvaluatedHint={lastEvaluatedHint}
 			/>
 
-			{/* Slim stats row */}
-			<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-				<AlertStatCard
-					label="Triggered (24h)"
-					value={triggered24h}
-					hint={triggered24h === 1 ? "incident" : "incidents"}
-				/>
-				<AlertStatCard label="Avg MTTR" value={mttr} hint="across resolved" />
-				<AlertStatCard label="Rules enabled" value={enabledRules} hint={`of ${rules.length} total`} />
-			</div>
-
-			{/* No-activity hint — the hero already covers the "all clear" feeling */}
-			{openIncidents.length === 0 && deliveryEvents.length === 0 && (
-				<div className="rounded-md border border-dashed border-border/60 py-8 text-center text-muted-foreground text-sm">
-					No recent notifications. Quiet is good.
-				</div>
-			)}
-
-			{/* Active incidents — filterable + groupable by the rule's tags */}
+			{/* Active incidents — the actionable list, severity-sorted, filterable by tag */}
 			{openIncidents.length > 0 && (
 				<div className="space-y-3">
 					<div className="flex items-center justify-between gap-2">
@@ -432,6 +424,26 @@ function MonitorTab({
 							)}
 						</TableBody>
 					</Table>
+				</div>
+			)}
+
+			{/* Slim summary strip — a secondary glance, sits beneath the incident list */}
+			<AlertStatStrip
+				items={[
+					{
+						label: "Triggered (24h)",
+						value: triggered24h,
+						hint: triggered24h === 1 ? "incident" : "incidents",
+					},
+					{ label: "Avg MTTR", value: mttr, hint: "across resolved" },
+					{ label: "Rules enabled", value: enabledRules, hint: `of ${rules.length} total` },
+				]}
+			/>
+
+			{/* No-activity hint — only when nothing has happened at all */}
+			{openIncidents.length === 0 && deliveryEvents.length === 0 && (
+				<div className="rounded-md border border-dashed border-border/60 py-8 text-center text-muted-foreground text-sm">
+					No recent notifications. Quiet is good.
 				</div>
 			)}
 
@@ -1088,7 +1100,7 @@ function AlertsPage() {
 
 					{/* ─── Settings Tab ─── */}
 					{activeTab === "settings" && (
-						<div className="space-y-10">
+						<div className="space-y-8">
 							{/* Destinations section */}
 							<section className="space-y-4">
 								<div>
