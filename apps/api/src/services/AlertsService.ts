@@ -2559,7 +2559,14 @@ export class AlertsService extends Context.Service<AlertsService, AlertsServiceS
 
 			const tenant = systemTenant(orgId)
 			const rows = yield* warehouse
-				.compiledQuery(tenant, compiled, { profile: "list", context: "listAlertChecks" })
+				// alert_checks is written via `ingest` (Tinybird-pinned) with no
+				// per-org MV, so read it from the same managed Tinybird — otherwise a
+				// BYO-ClickHouse org reads an empty table from its own ClickHouse.
+				.compiledQuery(tenant, compiled, {
+					profile: "list",
+					context: "listAlertChecks",
+					pinToIngestConfig: true,
+				})
 				.pipe(
 					Effect.mapError(
 						(error) =>
