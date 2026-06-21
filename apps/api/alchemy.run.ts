@@ -1,6 +1,6 @@
 import path from "node:path"
 import alchemy from "alchemy"
-import { D1Database, KVNamespace, Worker, Workflow } from "alchemy/cloudflare"
+import { D1Database, KVNamespace, Worker, WorkerStub, Workflow } from "alchemy/cloudflare"
 import type { MapleDomains, MapleStage } from "@maple/infra/cloudflare"
 import { resolveD1Name, resolveDeploymentEnvironment, resolveWorkerName } from "@maple/infra/cloudflare"
 
@@ -62,6 +62,18 @@ export const createMapleApi = async ({ stage, domains }: CreateMapleApiOptions) 
 		className: "AiTriageWorkflow",
 	})
 
+	// Service binding to the chat-flue worker that hosts the Flue `triage`
+	// workflow (the AI triage agent's investigation step). chat-flue is created
+	// AFTER api in the root alchemy.run.ts (it needs api's URL), so a plain
+	// service-binding ref to its name fails the api upload with CF error 10143
+	// ("references Worker ... which was not found"). Reserve the name with an
+	// empty WorkerStub first; chat-flue's real deploy adopts it (adopt: true).
+	// This breaks the api↔chat-flue cycle without a URL dependency.
+	const chatFlue = await WorkerStub("chat-flue-stub", {
+		name: resolveWorkerName("chat-flue", stage),
+		url: false,
+	})
+
 	const worker = await Worker("api", {
 		name: resolveWorkerName("api", stage),
 		cwd: import.meta.dirname,
@@ -76,6 +88,7 @@ export const createMapleApi = async ({ stage, domains }: CreateMapleApiOptions) 
 			MCP_SESSIONS: mcpSessions,
 			CLICKHOUSE_SCHEMA_APPLY_WORKFLOW: schemaApplyWorkflow,
 			AI_TRIAGE_WORKFLOW: aiTriageWorkflow,
+			CHAT_FLUE: chatFlue,
 			TINYBIRD_HOST: requireEnv("TINYBIRD_HOST"),
 			TINYBIRD_TOKEN: alchemy.secret(requireEnv("TINYBIRD_TOKEN")),
 			...optionalPlain("CLICKHOUSE_URL"),
