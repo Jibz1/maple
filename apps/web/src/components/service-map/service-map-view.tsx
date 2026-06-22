@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useCallback } from "react"
 import {
 	ReactFlow,
 	Controls,
@@ -1508,12 +1508,23 @@ export function ServiceMapCanvas({
 		return () => cancelAnimationFrame(raf)
 	}, [nodes])
 
-	// Derive a dotted box per namespace from the LIVE node positions/sizes, so the
-	// boxes follow drags and resize in real time. Only service nodes carrying a
-	// namespace participate; databases and namespace-less services stay unboxed.
+	// Derive a dotted box per namespace from the node positions/sizes, so the boxes
+	// follow drags and hug the service cards. Only service nodes carrying a namespace
+	// participate; databases and namespace-less services stay unboxed.
+	//
+	// Boxes are derived from `nodes` at DEFERRED priority. During the mount
+	// measurement cascade (and drags), ReactFlow updates `nodes` many times in quick
+	// succession; recomputing the boxes synchronously resized their DOM on every
+	// single measurement, which ReactFlow's own node ResizeObserver then re-observed
+	// mid-frame — producing a burst of benign "ResizeObserver loop completed with
+	// undelivered notifications" warnings (173 in one session). useDeferredValue lets
+	// the boxes lag the urgent measurement render by a frame so each resize lands in
+	// its own commit, collapsing the burst. The ~1-frame lag is imperceptible and the
+	// boxes still settle tight around the nodes.
+	const deferredNodes = useDeferredValue(nodes)
 	const namespaceGroupNodes = useMemo<Node<NamespaceGroupData>[]>(() => {
 		const extents = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>()
-		for (const node of nodes) {
+		for (const node of deferredNodes) {
 			if (node.id.startsWith(DB_NODE_PREFIX)) continue
 			const ns = (node.data as ServiceNodeData).namespace
 			if (!ns) continue
@@ -1560,9 +1571,10 @@ export function ServiceMapCanvas({
 			})
 		}
 		return boxes
-	}, [nodes])
+	}, [deferredNodes])
 
-	// Boxes first so they paint behind the service nodes.
+	// Boxes first so they paint behind the service nodes. The service nodes use the
+	// LIVE `nodes` (must stay current); only the derived boxes run a frame behind.
 	const renderedNodes = useMemo(() => [...namespaceGroupNodes, ...nodes], [namespaceGroupNodes, nodes])
 
 	if (nodes.length === 0) {
