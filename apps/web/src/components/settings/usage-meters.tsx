@@ -19,6 +19,16 @@ function MeterRow({ icon: Icon, label, used, limit, formatValue }: MeterRowProps
 	const pct = usagePercentage(used, limit)
 	const isUnlimited = limit === Infinity
 	const limitLabel = isUnlimited ? "Unlimited" : formatValue(limit)
+	const over = !isUnlimited && used > limit ? used - limit : 0
+	const level = pct > 100 ? "over" : pct > 80 ? "approaching" : "ok"
+	const barClass =
+		level === "over" ? "bg-destructive" : level === "approaching" ? "bg-severity-warn" : "bg-primary"
+	const pctClass =
+		level === "over"
+			? "text-destructive"
+			: level === "approaching"
+				? "text-severity-warn"
+				: "text-muted-foreground"
 
 	return (
 		<ProgressPrimitive.Root value={pct} className="flex flex-col gap-2">
@@ -28,15 +38,20 @@ function MeterRow({ icon: Icon, label, used, limit, formatValue }: MeterRowProps
 				<span className="text-muted-foreground ml-auto text-xs tabular-nums font-mono">
 					{formatValue(used)} / {limitLabel}
 				</span>
+				{!isUnlimited && (
+					<span className={cn("w-10 text-right text-xs tabular-nums font-mono", pctClass)}>
+						{Math.round(pct)}%
+					</span>
+				)}
 			</div>
 			<ProgressPrimitive.Track className="bg-muted h-1.5 relative flex w-full items-center overflow-x-hidden">
-				<ProgressPrimitive.Indicator
-					className={cn(
-						"h-full transition-all",
-						pct > 100 ? "bg-destructive" : pct > 80 ? "bg-severity-warn" : "bg-primary",
-					)}
-				/>
+				<ProgressPrimitive.Indicator className={cn("h-full transition-all", barClass)} />
 			</ProgressPrimitive.Track>
+			{over > 0 && (
+				<span className="text-destructive text-[11px] tabular-nums">
+					{formatValue(over)} over included
+				</span>
+			)}
 		</ProgressPrimitive.Root>
 	)
 }

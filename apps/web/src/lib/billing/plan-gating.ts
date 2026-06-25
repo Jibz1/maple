@@ -4,7 +4,6 @@ import type {
 	BillingSubscription,
 	CatalogPlan,
 } from "@maple/domain/http"
-import type { AggregatedUsage } from "./usage"
 
 type Customer = BillingCustomer
 
@@ -21,10 +20,6 @@ export type { CatalogPlan }
 // Metered ingestion features whose usage we surface alerts for. Mirrors the
 // Autumn feature ids defined in apps/api/autumn.config.ts.
 const METERED_INGEST_FEATURES = ["logs", "traces", "metrics"] as const
-
-// Metered features we surface overage costs for — the ingest trio plus browser
-// sessions, all of which carry usage-based pricing on the Startup plan.
-const OVERAGE_FEATURES = ["logs", "traces", "metrics", "browser_sessions"] as const
 
 // Surface a warning once usage crosses 80% of the included grant; "over" once it
 // reaches 100%. Mirrors the meter thresholds in usage-meters.tsx.
@@ -207,88 +202,4 @@ export function getLegacyPlanInfo(
 	const sub = getActivePlan(customer)
 	if (!sub) return { isLegacy: false, planName: null }
 	return { isLegacy: isLegacyPlan(sub, plans), planName: sub.plan?.name ?? sub.planId }
-}
-
-export interface FeatureOverage {
-	featureId: string
-	usage: number
-	granted: number
-	overageUnits: number
-	/** Price per billing unit (e.g. $/GB or $/session), read live from the plan. */
-	rate: number
-	cost: number
-}
-
-export interface OverageSummary {
-	features: FeatureOverage[]
-	total: number
-	hasOverage: boolean
-}
-
-// Maps an Autumn featureId to the usage value already aggregated for the meters,
-// so the overage breakdown agrees exactly with what the meters display.
-function usageForFeature(featureId: string, usage: AggregatedUsage): number {
-	switch (featureId) {
-		case "logs":
-			return usage.logsGB
-		case "traces":
-			return usage.tracesGB
-		case "metrics":
-			return usage.metricsGB
-		case "browser_sessions":
-			return usage.browserSessions
-		default:
-			return 0
-	}
-}
-
-// Per-unit overage price for a feature, read from the catalog plan's items. Null
-// when the feature isn't priced or uses tiered (amount-less) pricing.
-function overageRateForFeature(catalogPlan: CatalogPlan | undefined, featureId: string): number | null {
-	const price = catalogPlan?.items?.find((item) => item.featureId === featureId)?.price
-	if (!price || price.amount == null) return null
-	const units = price.billingUnits || 1
-	return price.amount / units
-}
-
-// Estimated overage charges accruing this period: for each usage-based metered
-// feature whose usage exceeds the included grant, `(usage − granted) × rate`.
-// Rates come live from the `listPlans` catalog (no hardcoded prices), matched to
-// the org's active planId. Empty when nothing is over or the org isn't on a
-// usage-based plan in the current catalog.
-export function getOverageSummary(
-	customer: Customer | null | undefined,
-	usage: AggregatedUsage,
-	plans: ReadonlyArray<CatalogPlan> | null | undefined,
-): OverageSummary {
-	const balances = customer?.balances
-	const activeSub = getActivePlan(customer)
-	const catalogPlan = activeSub ? plans?.find((plan) => plan.id === activeSub.planId) : undefined
-	const features: FeatureOverage[] = []
-
-	if (balances && catalogPlan) {
-		for (const featureId of OVERAGE_FEATURES) {
-			const balance = balances[featureId]
-			if (!balance?.overageAllowed) continue
-
-			// A feature with no finite grant (null/unlimited) has no included
-			// threshold to exceed, so its usage isn't overage. Without this guard a
-			// `granted: null` balance would collapse to `granted = 0` below and bill
-			// the entire metered usage as overage.
-			if (balance.granted == null || balance.unlimited) continue
-
-			const rate = overageRateForFeature(catalogPlan, featureId)
-			if (rate == null) continue
-
-			const granted = balance.granted
-			const used = usageForFeature(featureId, usage)
-			const overageUnits = used - granted
-			if (overageUnits <= 0) continue
-
-			features.push({ featureId, usage: used, granted, overageUnits, rate, cost: overageUnits * rate })
-		}
-	}
-
-	const total = features.reduce((sum, feature) => sum + feature.cost, 0)
-	return { features, total, hasOverage: features.length > 0 }
 }

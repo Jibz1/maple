@@ -11,6 +11,7 @@ import {
 	subscribeSelfHostedAuthChanges,
 } from "./lib/services/common/self-hosted-auth"
 import { router, type RouterAuthContext } from "./router"
+import { BootSplash } from "./components/boot-splash"
 import { appRegistry } from "./lib/registry"
 import { clearChunkReloadGuard, shouldAttemptChunkReload } from "./lib/chunk-reload"
 import { MapleBrowser } from "@maple-dev/browser"
@@ -144,7 +145,7 @@ function ClerkInnerApp() {
 		router.invalidate()
 	}, [settled, isSignedIn, orgId])
 
-	if (!settled) return null
+	if (!settled) return <BootSplash />
 
 	return (
 		<EffectRouterProvider
@@ -178,7 +179,7 @@ function SelfHostedInnerApp() {
 	}, [auth])
 
 	if (!auth) {
-		return null
+		return <BootSplash />
 	}
 
 	return <EffectRouterProvider router={router} registry={appRegistry} context={{ auth }} />

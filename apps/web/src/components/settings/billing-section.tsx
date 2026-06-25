@@ -13,16 +13,10 @@ import {
 	billingUsageAtom,
 } from "@/lib/services/atoms/billing-atoms"
 import { useBillingActions } from "@/hooks/use-billing-actions"
-import {
-	getLegacyPlanInfo,
-	getOverageSummary,
-	getTrialStatus,
-	type TrialStatus,
-} from "@/lib/billing/plan-gating"
+import { getLegacyPlanInfo, getTrialStatus, type TrialStatus } from "@/lib/billing/plan-gating"
 import { getPlanLimits, type PlanLimits } from "@/lib/billing/plans"
 import type { AggregatedUsage } from "@/lib/billing/usage"
 import { UsageMeters } from "./usage-meters"
-import { OverageSummary } from "./overage-summary"
 import { PricingCards } from "./pricing-cards"
 
 function limitsFromCustomer(balances: BillingCustomer["balances"]): PlanLimits | null {
@@ -206,7 +200,6 @@ export function BillingSection() {
 		metricsGB: usageTotal?.metrics?.sum ?? 0,
 		browserSessions: usageTotal?.browser_sessions?.sum ?? 0,
 	}
-	const overage = getOverageSummary(customer, usage, plans)
 
 	return (
 		<div>
@@ -223,7 +216,6 @@ export function BillingSection() {
 				<div className="mt-5">
 					{isLoading ? <UsageSkeleton /> : <UsageMeters usage={usage} limits={limits} />}
 				</div>
-				{!isLoading && <OverageSummary summary={overage} />}
 			</section>
 
 			<section className="mt-12">
